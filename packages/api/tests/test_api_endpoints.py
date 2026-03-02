@@ -26,21 +26,16 @@ class TestHealthEndpoint:
 class TestChildrenEndpoints:
     """Test children CRUD endpoints."""
 
-    def test_list_children(self, client, mock_db, sample_child):
-        mock_db.set_table_data("children", [sample_child])
-
-        with patch("routers.children.get_supabase", return_value=mock_db):
+    def test_list_children(self, client, sample_child):
+        with patch("routers.children.fetch_all", return_value=[sample_child]):
             response = client.get("/children/")
 
         assert response.status_code == 200
         data = response.json()
         assert isinstance(data, list)
 
-    def test_create_child(self, client, mock_db, sample_child):
-        # Mock must return all fields expected by ChildResponse
-        mock_db.set_table_data("children", [sample_child])
-
-        with patch("routers.children.get_supabase", return_value=mock_db):
+    def test_create_child(self, client, sample_child):
+        with patch("routers.children.execute_returning", return_value=sample_child):
             response = client.post("/children/", json={
                 "name": "Luna",
                 "date_of_birth": "2023-06-15",
@@ -52,11 +47,9 @@ class TestChildrenEndpoints:
 class TestEventsEndpoints:
     """Test events batch and query endpoints."""
 
-    def test_get_events_by_date(self, client, mock_db, sample_child, sample_events):
-        mock_db.set_table_data("children", [sample_child])
-        mock_db.set_table_data("emotion_events", sample_events)
-
-        with patch("routers.events.get_supabase", return_value=mock_db):
+    def test_get_events_by_date(self, client, sample_child, sample_events):
+        with patch("routers.events.fetch_one", return_value=sample_child), \
+             patch("routers.events.fetch_all", return_value=sample_events):
             response = client.get("/events/child-001?date=2026-03-01")
 
         assert response.status_code == 200
@@ -65,11 +58,9 @@ class TestEventsEndpoints:
 class TestSummariesEndpoints:
     """Test summary endpoints."""
 
-    def test_baseline_status_no_data(self, client, mock_db, sample_child):
-        mock_db.set_table_data("children", [sample_child])
-        mock_db.set_table_data("child_baselines", [])
-
-        with patch("routers.summaries.get_supabase", return_value=mock_db):
+    def test_baseline_status_no_data(self, client, sample_child):
+        with patch("routers.summaries.fetch_one", return_value=sample_child), \
+             patch("routers.summaries.fetch_all", return_value=[]):
             response = client.get("/summaries/child-001/baseline-status")
 
         assert response.status_code == 200
@@ -78,11 +69,9 @@ class TestSummariesEndpoints:
         assert data["days_of_data"] == 0
         assert data["days_remaining"] == 7
 
-    def test_patterns_no_data(self, client, mock_db, sample_child):
-        mock_db.set_table_data("children", [sample_child])
-        mock_db.set_table_data("daily_summaries", [])
-
-        with patch("routers.summaries.get_supabase", return_value=mock_db):
+    def test_patterns_no_data(self, client, sample_child):
+        with patch("routers.summaries.fetch_one", return_value=sample_child), \
+             patch("routers.summaries.fetch_all", return_value=[]):
             response = client.get("/summaries/child-001/patterns")
 
         assert response.status_code == 200

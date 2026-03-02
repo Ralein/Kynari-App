@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch, AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
+from tests.conftest import MockPool
 
 
 # ─── Security Headers ───────────────────────────────────────
@@ -44,20 +45,15 @@ class TestRateLimiting:
 
     def test_rate_limit_returns_429(self, client: TestClient):
         """Verify 429 after exceeding limit."""
-        # The health endpoint is excluded from rate limiting per middleware logic,
-        # so we test with a protected endpoint that exists
-        # Since we can't auth easily, test the middleware class directly
         from middleware.rate_limit import RateLimitMiddleware
 
         limiter = RateLimitMiddleware(app=MagicMock())
 
-        # Simulate filling a window
         key = "test:user123"
         window_key = f"{key}:events"
         now = time.monotonic()
         limiter._windows[window_key] = [now - i * 0.1 for i in range(60)]
 
-        # Verify window is full
         assert len(limiter._windows[window_key]) == 60
 
     def test_rate_limit_config(self):
@@ -103,18 +99,11 @@ class TestDataRetention:
         from services.data_retention import DataRetentionService
 
         service = DataRetentionService()
+        mock_pool = MockPool()
+        mock_pool.set_data([{"id": "event-1"}, {"id": "event-2"}])
 
-        mock_db = MagicMock()
-        # Mock child with 90-day retention
-        mock_db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
-            data={"data_retention_days": 90}
-        )
-        # Mock delete response
-        mock_db.table.return_value.delete.return_value.eq.return_value.lt.return_value.execute.return_value = MagicMock(
-            data=[{"id": "event-1"}, {"id": "event-2"}]
-        )
-
-        with patch("services.data_retention.get_supabase", return_value=mock_db):
+        with patch("services.data_retention.fetch_one", return_value={"data_retention_days": 90}), \
+             patch("services.data_retention.get_pool", return_value=mock_pool):
             result = await service.purge_expired_events("child-123")
         assert result == 2
 
@@ -125,18 +114,18 @@ class TestDataRetention:
 
         service = DataRetentionService()
 
-        mock_db = MagicMock()
-        mock_db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
-            data={"data_retention_days": 90}
-        )
-        mock_db.table.return_value.select.return_value.eq.return_value.execute.return_value = MagicMock(
-            count=42
-        )
-        mock_db.table.return_value.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(
-            data=[{"timestamp": "2026-01-01T00:00:00Z"}]
-        )
+        call_count = [0]
+        def side_effect(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return {"data_retention_days": 90}
+            elif call_count[0] == 2:
+                return {"count": 42}
+            elif call_count[0] == 3:
+                return {"timestamp": "2026-01-01T00:00:00Z"}
+            return None
 
-        with patch("services.data_retention.get_supabase", return_value=mock_db):
+        with patch("services.data_retention.fetch_one", side_effect=side_effect):
             result = await service.get_retention_status("child-123")
         assert result["child_id"] == "child-123"
         assert result["retention_days"] == 90
@@ -147,14 +136,10 @@ class TestDataRetention:
         from services.data_retention import DataRetentionService
 
         service = DataRetentionService()
+        mock_pool = MockPool()
+        mock_pool.set_data([{"id": "1"}, {"id": "2"}])
 
-        # Patch where get_supabase is used (not where it's defined)
-        mock_db = MagicMock()
-        mock_db.table.return_value.delete.return_value.eq.return_value.execute.return_value = MagicMock(
-            data=[{"id": "1"}, {"id": "2"}]
-        )
-
-        with patch("services.data_retention.get_supabase", return_value=mock_db):
+        with patch("services.data_retention.get_pool", return_value=mock_pool):
             result = await service.purge_all_child_data("child-123")
 
         assert result["child_id"] == "child-123"

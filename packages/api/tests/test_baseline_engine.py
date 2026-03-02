@@ -2,6 +2,7 @@
 
 import pytest
 from unittest.mock import patch, MagicMock
+from tests.conftest import MockPool
 from services.baseline_engine import BaselineEngine, _hour_to_period
 
 
@@ -15,12 +16,12 @@ class TestBaselineEngine:
     # ─── Recalculate Baseline ─────────────────────────────
 
     @pytest.mark.asyncio
-    async def test_recalculate_baseline_with_data(self, engine, mock_db, sample_events_multiday):
+    async def test_recalculate_baseline_with_data(self, engine, sample_events_multiday):
         """Baseline should compute mean/std from multiday events."""
-        mock_db.set_table_data("emotion_events", sample_events_multiday)
-        mock_db.set_table_data("child_baselines", [])
+        mock_pool = MockPool()
 
-        with patch("services.baseline_engine.get_supabase", return_value=mock_db):
+        with patch("services.baseline_engine.fetch_all", return_value=sample_events_multiday), \
+             patch("services.baseline_engine.get_pool", return_value=mock_pool):
             result = await engine.recalculate_baseline("child-001")
 
         assert result is not None
@@ -31,30 +32,24 @@ class TestBaselineEngine:
         assert result["happy"]["days_of_data"] == 10
 
     @pytest.mark.asyncio
-    async def test_recalculate_baseline_no_events(self, engine, mock_db):
+    async def test_recalculate_baseline_no_events(self, engine):
         """Should return None when there are no events."""
-        mock_db.set_table_data("emotion_events", [])
-
-        with patch("services.baseline_engine.get_supabase", return_value=mock_db):
+        with patch("services.baseline_engine.fetch_all", return_value=[]):
             result = await engine.recalculate_baseline("child-001")
 
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_calibration_incomplete_few_days(self, engine, mock_db):
+    async def test_calibration_incomplete_few_days(self, engine):
         """Calibration should be False with < 7 days of data."""
-        # Only 3 days of events
-        events = []
-        for day in range(3):
-            events.append({
-                "emotion_label": "happy",
-                "timestamp": f"2026-03-0{day + 1}T10:00:00Z",
-            })
+        events = [
+            {"emotion_label": "happy", "timestamp": f"2026-03-0{day + 1}T10:00:00Z"}
+            for day in range(3)
+        ]
+        mock_pool = MockPool()
 
-        mock_db.set_table_data("emotion_events", events)
-        mock_db.set_table_data("child_baselines", [])
-
-        with patch("services.baseline_engine.get_supabase", return_value=mock_db):
+        with patch("services.baseline_engine.fetch_all", return_value=events), \
+             patch("services.baseline_engine.get_pool", return_value=mock_pool):
             result = await engine.recalculate_baseline("child-001")
 
         assert result is not None
@@ -64,53 +59,45 @@ class TestBaselineEngine:
     # ─── Get Deviation ────────────────────────────────────
 
     @pytest.mark.asyncio
-    async def test_get_deviation_calibrated(self, engine, mock_db):
+    async def test_get_deviation_calibrated(self, engine):
         """Should return z-score when calibrated."""
-        mock_db.set_table_data("child_baselines", [{
+        with patch("services.baseline_engine.fetch_one", return_value={
             "mean_frequency": 4.0,
             "std_deviation": 1.0,
             "calibration_complete": True,
-        }])
-
-        with patch("services.baseline_engine.get_supabase", return_value=mock_db):
+        }):
             z = await engine.get_deviation("child-001", "happy", 6.0)
 
         assert z == 2.0  # (6 - 4) / 1
 
     @pytest.mark.asyncio
-    async def test_get_deviation_not_calibrated(self, engine, mock_db):
+    async def test_get_deviation_not_calibrated(self, engine):
         """Should return None when not calibrated."""
-        mock_db.set_table_data("child_baselines", [{
+        with patch("services.baseline_engine.fetch_one", return_value={
             "mean_frequency": 4.0,
             "std_deviation": 1.0,
             "calibration_complete": False,
-        }])
-
-        with patch("services.baseline_engine.get_supabase", return_value=mock_db):
+        }):
             z = await engine.get_deviation("child-001", "happy", 6.0)
 
         assert z is None
 
     @pytest.mark.asyncio
-    async def test_get_deviation_zero_std(self, engine, mock_db):
+    async def test_get_deviation_zero_std(self, engine):
         """Should return 0.0 when std is zero (no variation)."""
-        mock_db.set_table_data("child_baselines", [{
+        with patch("services.baseline_engine.fetch_one", return_value={
             "mean_frequency": 4.0,
             "std_deviation": 0.0,
             "calibration_complete": True,
-        }])
-
-        with patch("services.baseline_engine.get_supabase", return_value=mock_db):
+        }):
             z = await engine.get_deviation("child-001", "happy", 6.0)
 
         assert z == 0.0
 
     @pytest.mark.asyncio
-    async def test_get_deviation_no_baseline(self, engine, mock_db):
+    async def test_get_deviation_no_baseline(self, engine):
         """Should return None when no baseline exists."""
-        mock_db.set_table_data("child_baselines", [])
-
-        with patch("services.baseline_engine.get_supabase", return_value=mock_db):
+        with patch("services.baseline_engine.fetch_one", return_value=None):
             z = await engine.get_deviation("child-001", "happy", 6.0)
 
         assert z is None
@@ -118,13 +105,13 @@ class TestBaselineEngine:
     # ─── Daily Summary ────────────────────────────────────
 
     @pytest.mark.asyncio
-    async def test_generate_daily_summary(self, engine, mock_db, sample_events):
+    async def test_generate_daily_summary(self, engine, sample_events):
         """Should produce a summary with correct dominant emotion."""
-        mock_db.set_table_data("emotion_events", sample_events)
-        mock_db.set_table_data("child_baselines", [])
-        mock_db.set_table_data("daily_summaries", [])
+        mock_pool = MockPool()
 
-        with patch("services.baseline_engine.get_supabase", return_value=mock_db):
+        with patch("services.baseline_engine.fetch_all", return_value=sample_events), \
+             patch("services.baseline_engine.fetch_one", return_value=None), \
+             patch("services.baseline_engine.get_pool", return_value=mock_pool):
             result = await engine.generate_daily_summary("child-001", "2026-03-01")
 
         assert result is not None
@@ -137,11 +124,9 @@ class TestBaselineEngine:
         assert len(result["insight_text"]) > 0
 
     @pytest.mark.asyncio
-    async def test_generate_daily_summary_no_events(self, engine, mock_db):
+    async def test_generate_daily_summary_no_events(self, engine):
         """Should return None when no events exist for the date."""
-        mock_db.set_table_data("emotion_events", [])
-
-        with patch("services.baseline_engine.get_supabase", return_value=mock_db):
+        with patch("services.baseline_engine.fetch_all", return_value=[]):
             result = await engine.generate_daily_summary("child-001", "2026-03-01")
 
         assert result is None
