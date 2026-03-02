@@ -101,3 +101,24 @@ export async function getTimeline(
         token,
     });
 }
+
+// ─── AI Reports API ─────────────────────────────────────────
+
+export interface WeeklyReport {
+    narrative: string;
+    week_start: string;
+    generated_at: string;
+    cached: boolean;
+}
+
+export async function getAIWeeklyReport(
+    token: string,
+    childId: string,
+    weekStart?: string
+): Promise<WeeklyReport> {
+    const params = weekStart ? `?week_start=${weekStart}` : "";
+    return apiFetch<WeeklyReport>(
+        `/summaries/${childId}/ai-report${params}`,
+        { token }
+    );
+}
