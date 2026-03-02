@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch, AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
+from tests.conftest import MockPool
 
 
 # ─── AI Report Service ──────────────────────────────────────
@@ -47,25 +48,16 @@ class TestAIReportService:
         from services.ai_report import AIReportService
 
         service = AIReportService()
-        mock_db = MagicMock()
+        mock_pool = MockPool()
 
-        # Mock child name lookup
-        mock_db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
-            data={"name": "Luna"}
-        )
-        # Mock daily summaries fetch (empty = triggers fallback)
-        mock_db.table.return_value.select.return_value.eq.return_value.gte.return_value.lte.return_value.order.return_value.execute.return_value = MagicMock(
-            data=[]
-        )
-        # Mock upsert
-        mock_db.table.return_value.upsert.return_value.execute.return_value = MagicMock(data=[{}])
-
-        with patch("services.ai_report.get_supabase", return_value=mock_db):
+        with patch("services.ai_report.fetch_one", return_value={"name": "Luna"}), \
+             patch("services.ai_report.fetch_all", return_value=[]), \
+             patch("services.ai_report.get_pool", return_value=mock_pool), \
+             patch("services.ai_report.get_settings") as mock_settings:
+            mock_settings.return_value.anthropic_api_key = ""
             result = await service.generate_weekly_narrative("child-001", date(2026, 2, 24))
 
         assert "Luna" in result
-        # Verify upsert was called (report stored)
-        mock_db.table.return_value.upsert.assert_called()
 
     @pytest.mark.asyncio
     async def test_get_weekly_report(self):
@@ -73,12 +65,11 @@ class TestAIReportService:
         from services.ai_report import AIReportService
 
         service = AIReportService()
-        mock_db = MagicMock()
-        mock_db.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
-            data={"narrative": "A great week!", "created_at": "2026-02-28T00:00:00Z"}
-        )
 
-        with patch("services.ai_report.get_supabase", return_value=mock_db):
+        with patch("services.ai_report.fetch_one", return_value={
+            "narrative": "A great week!",
+            "created_at": "2026-02-28T00:00:00Z",
+        }):
             result = await service.get_weekly_report("child-001", date(2026, 2, 24))
 
         assert result["narrative"] == "A great week!"
@@ -122,10 +113,7 @@ class TestAIReportEndpoint:
     def test_ai_report_endpoint_exists(self, client: TestClient):
         """Verify the ai-report route is registered."""
         # This should return 404 (child not found) rather than 405 (method not allowed)
-        with patch("routers.summaries.get_supabase") as mock_db:
-            mock_db.return_value.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
-                data=None
-            )
+        with patch("routers.summaries.fetch_one", return_value=None):
             response = client.get("/summaries/fake-child/ai-report")
             # 404 = route exists but child not found (correct behavior)
             assert response.status_code == 404

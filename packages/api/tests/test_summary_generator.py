@@ -15,11 +15,9 @@ class TestSummaryGenerator:
     # ─── Weekly Summary ───────────────────────────────────
 
     @pytest.mark.asyncio
-    async def test_generate_weekly_with_data(self, generator, mock_db, sample_daily_summaries):
+    async def test_generate_weekly_with_data(self, generator, sample_daily_summaries):
         """Should produce a weekly summary with trends."""
-        mock_db.set_table_data("daily_summaries", sample_daily_summaries)
-
-        with patch("services.summary_generator.get_supabase", return_value=mock_db):
+        with patch("services.summary_generator.fetch_all", return_value=sample_daily_summaries):
             result = await generator.generate_weekly("child-001", "2026-02-24")
 
         assert result is not None
@@ -31,11 +29,9 @@ class TestSummaryGenerator:
         assert len(result["narrative"]) > 0
 
     @pytest.mark.asyncio
-    async def test_generate_weekly_no_data(self, generator, mock_db):
+    async def test_generate_weekly_no_data(self, generator):
         """Should return empty placeholder when no summaries exist."""
-        mock_db.set_table_data("daily_summaries", [])
-
-        with patch("services.summary_generator.get_supabase", return_value=mock_db):
+        with patch("services.summary_generator.fetch_all", return_value=[]):
             result = await generator.generate_weekly("child-001", "2026-02-24")
 
         assert result is not None
@@ -43,22 +39,18 @@ class TestSummaryGenerator:
         assert "No data" in result["narrative"]
 
     @pytest.mark.asyncio
-    async def test_weekly_trends_detected(self, generator, mock_db, sample_daily_summaries):
+    async def test_weekly_trends_detected(self, generator, sample_daily_summaries):
         """Should detect trends when emotion shifts between halves."""
-        mock_db.set_table_data("daily_summaries", sample_daily_summaries)
-
-        with patch("services.summary_generator.get_supabase", return_value=mock_db):
+        with patch("services.summary_generator.fetch_all", return_value=sample_daily_summaries):
             result = await generator.generate_weekly("child-001", "2026-02-24")
 
         trends = result.get("trends", {})
         assert trends.get("status") == "analyzed"
 
     @pytest.mark.asyncio
-    async def test_weekly_distribution_normalized(self, generator, mock_db, sample_daily_summaries):
+    async def test_weekly_distribution_normalized(self, generator, sample_daily_summaries):
         """Weekly distribution should be averaged across days."""
-        mock_db.set_table_data("daily_summaries", sample_daily_summaries)
-
-        with patch("services.summary_generator.get_supabase", return_value=mock_db):
+        with patch("services.summary_generator.fetch_all", return_value=sample_daily_summaries):
             result = await generator.generate_weekly("child-001", "2026-02-24")
 
         dist = result.get("weekly_distribution", {})

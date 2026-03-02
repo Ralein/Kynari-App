@@ -1,5 +1,6 @@
 from datetime import date, datetime
-from pydantic import BaseModel, Field, field_validator
+from uuid import UUID
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Literal
 
 
@@ -28,11 +29,13 @@ class ChildCreate(BaseModel):
 
 
 class ChildResponse(BaseModel):
-    id: str
-    parent_id: str
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    parent_id: UUID
     name: str
-    date_of_birth: str
-    created_at: str
+    date_of_birth: date
+    created_at: datetime
     avatar_url: str | None = None
 
 
@@ -59,14 +62,16 @@ class EmotionEventCreate(BaseModel):
 
 
 class EmotionEventResponse(BaseModel):
-    id: str
-    child_id: str
-    session_id: str
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    child_id: UUID
+    session_id: UUID
     emotion_label: EmotionLabel
     confidence: float
     modality: Modality
-    timestamp: str
-    created_at: str
+    timestamp: datetime
+    created_at: datetime
 
 
 # ─── Batch Request/Response ──────────────────────────────────
@@ -86,9 +91,11 @@ class BatchEventsResponse(BaseModel):
 # ─── Summary Schemas ─────────────────────────────────────────
 
 class DailySummaryResponse(BaseModel):
-    id: str
-    child_id: str
-    date: str
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    child_id: UUID
+    date: date
     dominant_emotion: EmotionLabel
     emotion_distribution: dict[str, float]
     total_events: int
