@@ -98,60 +98,65 @@ class TestDataRetention:
     """Test COPPA data retention service."""
 
     @pytest.mark.asyncio
-    async def test_purge_expired_events(self, mock_supabase):
+    async def test_purge_expired_events(self):
         """Test purging events older than retention window."""
         from services.data_retention import DataRetentionService
 
         service = DataRetentionService()
 
+        mock_db = MagicMock()
         # Mock child with 90-day retention
-        mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
+        mock_db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
             data={"data_retention_days": 90}
         )
         # Mock delete response
-        mock_supabase.table.return_value.delete.return_value.eq.return_value.lt.return_value.execute.return_value = MagicMock(
+        mock_db.table.return_value.delete.return_value.eq.return_value.lt.return_value.execute.return_value = MagicMock(
             data=[{"id": "event-1"}, {"id": "event-2"}]
         )
 
-        result = await service.purge_expired_events("child-123")
+        with patch("services.data_retention.get_supabase", return_value=mock_db):
+            result = await service.purge_expired_events("child-123")
         assert result == 2
 
     @pytest.mark.asyncio
-    async def test_get_retention_status(self, mock_supabase):
+    async def test_get_retention_status(self):
         """Test retention status reporting."""
         from services.data_retention import DataRetentionService
 
         service = DataRetentionService()
 
-        mock_supabase.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
+        mock_db = MagicMock()
+        mock_db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
             data={"data_retention_days": 90}
         )
-        mock_supabase.table.return_value.select.return_value.eq.return_value.execute.return_value = MagicMock(
+        mock_db.table.return_value.select.return_value.eq.return_value.execute.return_value = MagicMock(
             count=42
         )
-        mock_supabase.table.return_value.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(
+        mock_db.table.return_value.select.return_value.eq.return_value.order.return_value.limit.return_value.execute.return_value = MagicMock(
             data=[{"timestamp": "2026-01-01T00:00:00Z"}]
         )
 
-        result = await service.get_retention_status("child-123")
+        with patch("services.data_retention.get_supabase", return_value=mock_db):
+            result = await service.get_retention_status("child-123")
         assert result["child_id"] == "child-123"
         assert result["retention_days"] == 90
 
     @pytest.mark.asyncio
-    async def test_purge_all_child_data(self, mock_supabase):
+    async def test_purge_all_child_data(self):
         """Test full child data deletion (COPPA right-to-delete)."""
         from services.data_retention import DataRetentionService
 
         service = DataRetentionService()
 
-        # The service calls db.table(name).delete().eq("child_id", ...).execute()
-        # for three tables. With a single MagicMock, the full chain auto-creates
-        # nested mocks. We set the terminal .execute() to return 2 rows.
-        mock_supabase.table.return_value.delete.return_value.eq.return_value.execute.return_value = MagicMock(
+        # Patch where get_supabase is used (not where it's defined)
+        mock_db = MagicMock()
+        mock_db.table.return_value.delete.return_value.eq.return_value.execute.return_value = MagicMock(
             data=[{"id": "1"}, {"id": "2"}]
         )
 
-        result = await service.purge_all_child_data("child-123")
+        with patch("services.data_retention.get_supabase", return_value=mock_db):
+            result = await service.purge_all_child_data("child-123")
+
         assert result["child_id"] == "child-123"
         assert result["events_deleted"] == 2
         assert result["summaries_deleted"] == 2
