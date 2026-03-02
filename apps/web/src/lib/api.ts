@@ -122,3 +122,113 @@ export async function getAIWeeklyReport(
         { token }
     );
 }
+
+// ─── Analyze API ────────────────────────────────────────────
+
+export interface AnalyzeImageResult {
+    success: boolean;
+    modality?: string;
+    emotion_label?: string;
+    confidence?: number;
+    all_emotions?: Record<string, number>;
+    face_bbox?: number[];
+    faces_detected?: number;
+    error?: string;
+    message?: string;
+}
+
+export interface AnalyzeAudioResult {
+    success: boolean;
+    modality?: string;
+    cry_reason?: string;
+    cry_description?: string;
+    emotion_label?: string;
+    confidence?: number;
+    all_classes?: Record<string, number>;
+    audio_duration_seconds?: number;
+    error?: string;
+    message?: string;
+}
+
+export interface AnalyzeVideoResult {
+    success: boolean;
+    modality?: string;
+    emotion_label?: string;
+    confidence?: number;
+    face_analysis?: AnalyzeImageResult;
+    audio_analysis?: AnalyzeAudioResult;
+    frames_analyzed?: number;
+    error?: string;
+    message?: string;
+}
+
+export interface SaveResultResponse {
+    success: boolean;
+    event_id: string;
+    session_id: string;
+}
+
+export async function analyzeImage(
+    token: string,
+    file: File
+): Promise<AnalyzeImageResult> {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await fetch(`${API_BASE}/api/analyze/image`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+    });
+
+    return res.json();
+}
+
+export async function analyzeAudio(
+    token: string,
+    file: File | Blob
+): Promise<AnalyzeAudioResult> {
+    const formData = new FormData();
+    formData.append("file", file instanceof File ? file : new File([file], "recording.wav", { type: "audio/wav" }));
+
+    const res = await fetch(`${API_BASE}/api/analyze/audio`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+    });
+
+    return res.json();
+}
+
+export async function analyzeVideo(
+    token: string,
+    file: File
+): Promise<AnalyzeVideoResult> {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await fetch(`${API_BASE}/api/analyze/video`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+    });
+
+    return res.json();
+}
+
+export async function saveAnalysisResult(
+    token: string,
+    data: {
+        child_id: string;
+        emotion_label: string;
+        confidence: number;
+        modality: string;
+        raw_result?: Record<string, unknown>;
+    }
+): Promise<SaveResultResponse> {
+    return apiFetch<SaveResultResponse>("/api/analyze/save", {
+        method: "POST",
+        body: JSON.stringify(data),
+        token,
+    });
+}

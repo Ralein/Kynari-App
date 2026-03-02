@@ -22,6 +22,15 @@ export default function DashboardPage() {
                 <p className="text-text-secondary mt-1">
                     Here&apos;s how your little ones are doing today.
                 </p>
+                <div className="mt-4">
+                    <Link
+                        href="/analyze"
+                        className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-teal-600 to-teal-500 text-white font-semibold text-sm shadow-lg shadow-teal-500/20 hover:shadow-teal-500/30 transition-all duration-200 hover:scale-[1.02]"
+                    >
+                        <span>🔍</span>
+                        Analyze Baby Emotion
+                    </Link>
+                </div>
             </div>
 
             {/* Loading State */}

@@ -66,6 +66,25 @@ export default function ChildReportPage({
                 />
             )}
 
+            {/* Analyze CTA */}
+            <div className="glass rounded-2xl p-6 flex items-center justify-between">
+                <div>
+                    <h3 className="font-semibold font-[family-name:var(--font-sans)]">
+                        Analyze {child?.name}&apos;s emotions
+                    </h3>
+                    <p className="text-sm text-text-muted mt-0.5">
+                        Scan face, record audio, or upload a file
+                    </p>
+                </div>
+                <Link
+                    href="/analyze"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-teal-600 to-teal-500 text-white font-semibold text-sm shadow-lg shadow-teal-500/20 hover:shadow-teal-500/30 transition-all duration-200 hover:scale-[1.02] shrink-0"
+                >
+                    <span>🔍</span>
+                    Analyze Now
+                </Link>
+            </div>
+
             {/* Today's Summary Card */}
             <div className="glass rounded-2xl p-8">
                 <div className="flex items-center gap-3 mb-6">
@@ -127,8 +146,8 @@ export default function ChildReportPage({
                                 Baseline deviation:{" "}
                                 <span
                                     className={`font-medium ${Math.abs(summary.baseline_deviation) > 1.5
-                                            ? "text-coral"
-                                            : "text-teal-600"
+                                        ? "text-coral"
+                                        : "text-teal-600"
                                         }`}
                                 >
                                     {summary.baseline_deviation > 0 ? "+" : ""}
