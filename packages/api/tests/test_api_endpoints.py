@@ -5,27 +5,6 @@ from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi.testclient import TestClient
 
 
-@pytest.fixture
-def mock_auth():
-    """Mock the auth dependency to bypass JWT verification."""
-    return {"user_id": "parent-001", "email": "test@kynari.app", "role": "authenticated"}
-
-
-@pytest.fixture
-def client(mock_auth):
-    """Create a test client with mocked auth."""
-    from middleware.auth import get_current_user
-
-    # We need to override the dependency
-    from main import app
-    app.dependency_overrides[get_current_user] = lambda: mock_auth
-
-    client = TestClient(app)
-    yield client
-
-    app.dependency_overrides.clear()
-
-
 class TestHealthEndpoint:
     """Test the health and root endpoints (no auth required)."""
 

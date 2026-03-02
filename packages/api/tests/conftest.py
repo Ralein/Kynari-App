@@ -3,6 +3,36 @@
 import pytest
 from unittest.mock import MagicMock, patch
 from datetime import datetime, date, timezone, timedelta
+from fastapi.testclient import TestClient
+
+
+# ─── Auth & Client Fixtures ─────────────────────────────────
+
+
+@pytest.fixture
+def mock_auth():
+    """Mock the auth dependency to bypass JWT verification."""
+    return {"user_id": "parent-001", "email": "test@kynari.app", "role": "authenticated"}
+
+
+@pytest.fixture
+def client(mock_auth):
+    """Create a test client with mocked auth."""
+    from middleware.auth import get_current_user
+    from main import app
+
+    app.dependency_overrides[get_current_user] = lambda: mock_auth
+    client = TestClient(app)
+    yield client
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def mock_supabase():
+    """Create a MagicMock Supabase client for unit-testing services."""
+    mock = MagicMock()
+    with patch("database.get_supabase", return_value=mock):
+        yield mock
 
 
 # ─── Mock Supabase Client ────────────────────────────────────

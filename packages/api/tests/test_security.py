@@ -144,12 +144,12 @@ class TestDataRetention:
 
         service = DataRetentionService()
 
-        # Mock delete responses for each table
-        mock_delete = MagicMock()
-        mock_delete.eq.return_value.execute.return_value = MagicMock(
+        # The service calls db.table(name).delete().eq("child_id", ...).execute()
+        # for three tables. With a single MagicMock, the full chain auto-creates
+        # nested mocks. We set the terminal .execute() to return 2 rows.
+        mock_supabase.table.return_value.delete.return_value.eq.return_value.execute.return_value = MagicMock(
             data=[{"id": "1"}, {"id": "2"}]
         )
-        mock_supabase.table.return_value.delete.return_value = mock_delete
 
         result = await service.purge_all_child_data("child-123")
         assert result["child_id"] == "child-123"
