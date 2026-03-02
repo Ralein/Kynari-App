@@ -1,6 +1,6 @@
 # 🧒 Kynari
 
-> Privacy-first AI emotion detection for toddlers (ages 1–5)
+> Privacy-first AI emotion detection for toddlers (ages 0–5)
 
 Kynari listens for emotional tone — not words — and helps parents understand their child's emotional patterns. All ML inference runs on-device. Raw audio never leaves the phone.
 
