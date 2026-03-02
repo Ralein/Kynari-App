@@ -8,7 +8,7 @@ import logging
 from collections import defaultdict
 from datetime import date, timedelta
 
-from database import get_supabase
+from database import fetch_all
 from services.baseline_engine import baseline_engine
 
 logger = logging.getLogger(__name__)
@@ -33,24 +33,17 @@ class SummaryGenerator:
 
         Returns trend data: emotion shifts, dominant patterns, notable changes.
         """
-        db = get_supabase()
-
-        # Parse week start and compute week end
         start = date.fromisoformat(week_start)
         end = start + timedelta(days=6)
 
-        # Fetch daily summaries for the week
-        result = (
-            db.table("daily_summaries")
-            .select("*")
-            .eq("child_id", child_id)
-            .gte("date", start.isoformat())
-            .lte("date", end.isoformat())
-            .order("date")
-            .execute()
+        summaries = fetch_all(
+            """
+            SELECT * FROM daily_summaries
+            WHERE child_id = %s AND date >= %s AND date <= %s
+            ORDER BY date
+            """,
+            (child_id, start.isoformat(), end.isoformat()),
         )
-
-        summaries = result.data or []
 
         if not summaries:
             return {
@@ -121,7 +114,7 @@ class SummaryGenerator:
             second_avg = self._avg_emotion(second_half, emotion)
             delta = second_avg - first_avg
 
-            if abs(delta) > 10:  # meaningful shift (>10 percentage points)
+            if abs(delta) > 10:
                 direction = "increasing" if delta > 0 else "decreasing"
                 shifts.append({
                     "emotion": emotion,
@@ -156,7 +149,6 @@ class SummaryGenerator:
         if days_with_data == 0:
             return "No data available for this week."
 
-        # Most common dominant emotion
         from collections import Counter
         dominant_counts = Counter(dominant_sequence)
         most_common = dominant_counts.most_common(1)[0]
@@ -164,7 +156,6 @@ class SummaryGenerator:
 
         parts = []
 
-        # Opening
         if main_count == days_with_data:
             parts.append(
                 f"This week was consistently {main_emotion} "
@@ -182,16 +173,14 @@ class SummaryGenerator:
                 f"and {top_two[1][0]} ({top_two[1][1]} days) as the main emotions."
             )
 
-        # Trends
         shifts = trends.get("shifts", [])
         if shifts:
-            for shift in shifts[:2]:  # max 2 trend mentions
+            for shift in shifts[:2]:
                 parts.append(
                     f"{shift['emotion'].capitalize()} is {shift['direction']} "
                     f"({shift['delta']:+.1f} percentage points)."
                 )
 
-        # Volume
         parts.append(f"{total_events} total readings across {days_with_data} days.")
 
         return " ".join(parts)

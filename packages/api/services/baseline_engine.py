@@ -5,11 +5,12 @@ After 7+ unique days of data, calibration is marked complete and
 z-score deviations become available.
 """
 
+import json
 import logging
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 
-from database import get_supabase
+from database import fetch_one, fetch_all, get_pool
 
 logger = logging.getLogger(__name__)
 
@@ -43,19 +44,16 @@ class BaselineEngine:
         - days_of_data: unique days with at least one event
         - calibration_complete: True if days_of_data >= CALIBRATION_DAYS
         """
-        db = get_supabase()
-
         # Fetch events from the last 14 days
         window_start = (date.today() - timedelta(days=BASELINE_WINDOW_DAYS)).isoformat()
-        result = (
-            db.table("emotion_events")
-            .select("emotion_label, timestamp")
-            .eq("child_id", child_id)
-            .gte("timestamp", f"{window_start}T00:00:00Z")
-            .execute()
+        events = fetch_all(
+            """
+            SELECT emotion_label, timestamp FROM emotion_events
+            WHERE child_id = %s AND timestamp >= %s
+            """,
+            (child_id, f"{window_start}T00:00:00Z"),
         )
 
-        events = result.data or []
         if not events:
             logger.info(f"No events found for child {child_id} in baseline window")
             return None
@@ -66,7 +64,7 @@ class BaselineEngine:
 
         for event in events:
             emotion = event["emotion_label"]
-            event_date = event["timestamp"][:10]  # YYYY-MM-DD
+            event_date = str(event["timestamp"])[:10]  # YYYY-MM-DD
             daily_counts[emotion][event_date] += 1
             all_dates.add(event_date)
 
@@ -74,10 +72,10 @@ class BaselineEngine:
         calibrated = total_unique_days >= CALIBRATION_DAYS
 
         # Calculate stats per emotion and upsert
+        pool = get_pool()
         baselines = {}
         for emotion in EMOTION_LABELS:
             counts = daily_counts.get(emotion, {})
-            # Use all dates in period for mean (even if 0 events for this emotion)
             daily_values = [counts.get(d, 0) for d in all_dates]
 
             if not daily_values:
@@ -88,23 +86,37 @@ class BaselineEngine:
                 variance = sum((x - mean) ** 2 for x in daily_values) / max(len(daily_values), 1)
                 std = variance ** 0.5
 
-            baseline_data = {
+            now_ts = datetime.now(timezone.utc).isoformat()
+
+            with pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO child_baselines
+                            (child_id, emotion, mean_frequency, std_deviation,
+                             calibration_complete, days_of_data, last_updated)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (child_id, emotion) DO UPDATE SET
+                            mean_frequency = EXCLUDED.mean_frequency,
+                            std_deviation = EXCLUDED.std_deviation,
+                            calibration_complete = EXCLUDED.calibration_complete,
+                            days_of_data = EXCLUDED.days_of_data,
+                            last_updated = EXCLUDED.last_updated
+                        """,
+                        (child_id, emotion, round(mean, 4), round(std, 4),
+                         calibrated, total_unique_days, now_ts),
+                    )
+                conn.commit()
+
+            baselines[emotion] = {
                 "child_id": child_id,
                 "emotion": emotion,
                 "mean_frequency": round(mean, 4),
                 "std_deviation": round(std, 4),
                 "calibration_complete": calibrated,
                 "days_of_data": total_unique_days,
-                "last_updated": datetime.now(timezone.utc).isoformat(),
+                "last_updated": now_ts,
             }
-
-            # Upsert into child_baselines (unique on child_id + emotion)
-            db.table("child_baselines").upsert(
-                baseline_data,
-                on_conflict="child_id,emotion",
-            ).execute()
-
-            baselines[emotion] = baseline_data
 
         logger.info(
             f"Baseline recalculated for child {child_id}: "
@@ -121,23 +133,21 @@ class BaselineEngine:
 
         z = (current - mean) / std
         """
-        db = get_supabase()
-        result = (
-            db.table("child_baselines")
-            .select("mean_frequency, std_deviation, calibration_complete")
-            .eq("child_id", child_id)
-            .eq("emotion", emotion)
-            .single()
-            .execute()
+        baseline = fetch_one(
+            """
+            SELECT mean_frequency, std_deviation, calibration_complete
+            FROM child_baselines
+            WHERE child_id = %s AND emotion = %s
+            """,
+            (child_id, emotion),
         )
 
-        baseline = result.data
         if not baseline or not baseline.get("calibration_complete"):
             return None
 
         std = baseline["std_deviation"]
         if std == 0:
-            return 0.0  # No variation — no deviation
+            return 0.0
 
         mean = baseline["mean_frequency"]
         z_score = (current_frequency - mean) / std
@@ -150,19 +160,16 @@ class BaselineEngine:
         Aggregates events, calculates emotion distribution,
         detects deviations from baseline, and writes an insight.
         """
-        db = get_supabase()
-
-        # Fetch events for the target date
-        result = (
-            db.table("emotion_events")
-            .select("emotion_label, confidence, timestamp")
-            .eq("child_id", child_id)
-            .gte("timestamp", f"{target_date}T00:00:00Z")
-            .lt("timestamp", f"{target_date}T23:59:59Z")
-            .execute()
+        events = fetch_all(
+            """
+            SELECT emotion_label, confidence, timestamp FROM emotion_events
+            WHERE child_id = %s
+              AND timestamp >= %s
+              AND timestamp < %s
+            """,
+            (child_id, f"{target_date}T00:00:00Z", f"{target_date}T23:59:59Z"),
         )
 
-        events = result.data or []
         if not events:
             return None
 
@@ -198,11 +205,27 @@ class BaselineEngine:
             "insight_text": insight,
         }
 
-        # Upsert into daily_summaries (unique on child_id + date)
-        db.table("daily_summaries").upsert(
-            summary_data,
-            on_conflict="child_id,date",
-        ).execute()
+        # Upsert into daily_summaries
+        pool = get_pool()
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO daily_summaries
+                        (child_id, date, dominant_emotion, emotion_distribution,
+                         total_events, baseline_deviation, insight_text)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (child_id, date) DO UPDATE SET
+                        dominant_emotion = EXCLUDED.dominant_emotion,
+                        emotion_distribution = EXCLUDED.emotion_distribution,
+                        total_events = EXCLUDED.total_events,
+                        baseline_deviation = EXCLUDED.baseline_deviation,
+                        insight_text = EXCLUDED.insight_text
+                    """,
+                    (child_id, target_date, dominant,
+                     json.dumps(distribution), total, deviation, insight),
+                )
+            conn.commit()
 
         logger.info(
             f"Daily summary generated for child {child_id} on {target_date}: "
@@ -237,7 +260,8 @@ class BaselineEngine:
         # Detect time-of-day patterns
         hourly: dict[str, dict[int, int]] = defaultdict(lambda: defaultdict(int))
         for event in events:
-            hour = int(event["timestamp"][11:13])
+            ts = str(event["timestamp"])
+            hour = int(ts[11:13])
             hourly[event["emotion_label"]][hour] += 1
 
         time_insights = []
@@ -246,7 +270,7 @@ class BaselineEngine:
                 continue
             if hours:
                 peak_hour = max(hours, key=hours.get)  # type: ignore
-                if hours[peak_hour] >= 3:  # at least 3 events in one hour
+                if hours[peak_hour] >= 3:
                     period = _hour_to_period(peak_hour)
                     time_insights.append(f"{emotion} around {period}")
 
@@ -261,11 +285,9 @@ class BaselineEngine:
         else:
             insight = f"{dominant.capitalize()} was the most frequent emotion today ({dominant_pct}%)."
 
-        # Add time patterns
         if time_insights:
             insight += f" Notable patterns: {', '.join(time_insights)}."
 
-        # Check baseline deviation
         deviation = await self.get_deviation(child_id, dominant, counts[dominant])
         if deviation is not None and abs(deviation) > 1.5:
             direction = "more" if deviation > 0 else "less"

@@ -10,13 +10,12 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     debug: bool = False
 
-    # ─── Supabase ─────────────────────────────────────────
-    supabase_url: str = ""
-    supabase_anon_key: str = ""
-    supabase_service_role_key: str = ""
+    # ─── Database (Neon Postgres) ─────────────────────────
+    database_url: str = ""
 
     # ─── Auth ─────────────────────────────────────────────
     jwt_secret: str = ""
+    clerk_publishable_key: str = ""
 
     # ─── CORS ─────────────────────────────────────────────
     api_cors_origins: str = "http://localhost:3000,http://localhost:8081"

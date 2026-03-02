@@ -2,7 +2,7 @@
 
 from fastapi import Depends, HTTPException
 from middleware.auth import get_current_user
-from database import get_supabase
+from database import fetch_one
 
 
 async def require_pro_tier(user: dict = Depends(get_current_user)) -> dict:
@@ -10,17 +10,11 @@ async def require_pro_tier(user: dict = Depends(get_current_user)) -> dict:
 
     Returns the user dict if Pro, raises 403 otherwise.
     """
-    db = get_supabase()
-
-    result = (
-        db.table("user_preferences")
-        .select("tier, tier_expires_at")
-        .eq("user_id", user["user_id"])
-        .single()
-        .execute()
+    prefs = fetch_one(
+        "SELECT tier, tier_expires_at FROM user_preferences WHERE user_id = %s",
+        (user["user_id"],),
     )
 
-    prefs = result.data
     if not prefs or prefs.get("tier") != "pro":
         raise HTTPException(
             status_code=403,
@@ -35,7 +29,7 @@ async def require_pro_tier(user: dict = Depends(get_current_user)) -> dict:
     if prefs.get("tier_expires_at"):
         from datetime import datetime, timezone
 
-        expires = datetime.fromisoformat(prefs["tier_expires_at"])
+        expires = datetime.fromisoformat(str(prefs["tier_expires_at"]))
         if expires < datetime.now(timezone.utc):
             raise HTTPException(
                 status_code=403,

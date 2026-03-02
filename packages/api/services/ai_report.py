@@ -4,10 +4,11 @@ Uses Anthropic Claude to create warm, parent-friendly weekly
 summaries of a child's emotional patterns.
 """
 
+import json
 import logging
 from datetime import date, timedelta
 
-from database import get_supabase
+from database import fetch_one, fetch_all, get_pool
 from config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -35,33 +36,25 @@ class AIReportService:
         4. Stores result in weekly_reports table
         5. Returns narrative string
         """
-        db = get_supabase()
         settings = get_settings()
-
         week_end = week_start + timedelta(days=6)
 
         # Get child name
-        child = (
-            db.table("children")
-            .select("name")
-            .eq("id", child_id)
-            .single()
-            .execute()
+        child = fetch_one(
+            "SELECT name FROM children WHERE id = %s",
+            (child_id,),
         )
-        child_name = (child.data or {}).get("name", "your child")
+        child_name = (child or {}).get("name", "your child")
 
         # Fetch daily summaries for the week
-        summaries = (
-            db.table("daily_summaries")
-            .select("*")
-            .eq("child_id", child_id)
-            .gte("date", week_start.isoformat())
-            .lte("date", week_end.isoformat())
-            .order("date")
-            .execute()
+        summary_data = fetch_all(
+            """
+            SELECT * FROM daily_summaries
+            WHERE child_id = %s AND date >= %s AND date <= %s
+            ORDER BY date
+            """,
+            (child_id, week_start.isoformat(), week_end.isoformat()),
         )
-
-        summary_data = summaries.data or []
 
         if not summary_data:
             narrative = (
@@ -75,14 +68,18 @@ class AIReportService:
             )
 
         # Store the report
-        db.table("weekly_reports").upsert(
-            {
-                "child_id": child_id,
-                "week_start": week_start.isoformat(),
-                "narrative": narrative,
-            },
-            on_conflict="child_id,week_start",
-        ).execute()
+        pool = get_pool()
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO weekly_reports (child_id, week_start, narrative)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (child_id, week_start) DO UPDATE SET narrative = EXCLUDED.narrative
+                    """,
+                    (child_id, week_start.isoformat(), narrative),
+                )
+            conn.commit()
 
         return narrative
 
@@ -166,18 +163,10 @@ class AIReportService:
         self, child_id: str, week_start: date
     ) -> dict | None:
         """Retrieve a stored weekly report."""
-        db = get_supabase()
-
-        result = (
-            db.table("weekly_reports")
-            .select("*")
-            .eq("child_id", child_id)
-            .eq("week_start", week_start.isoformat())
-            .single()
-            .execute()
+        return fetch_one(
+            "SELECT * FROM weekly_reports WHERE child_id = %s AND week_start = %s",
+            (child_id, week_start.isoformat()),
         )
-
-        return result.data
 
 
 # Singleton

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from config import get_settings
-from database import get_supabase
+from database import fetch_one, execute_returning, get_pool
 from middleware.auth import get_current_user
 
 logger = logging.getLogger(__name__)
@@ -56,18 +56,13 @@ async def create_checkout_session(
     if not price_id:
         raise HTTPException(status_code=503, detail="Price not configured")
 
-    db = get_supabase()
-
     # Get or create Stripe customer
-    prefs = (
-        db.table("user_preferences")
-        .select("stripe_customer_id")
-        .eq("user_id", user["user_id"])
-        .single()
-        .execute()
+    prefs = fetch_one(
+        "SELECT stripe_customer_id FROM user_preferences WHERE user_id = %s",
+        (user["user_id"],),
     )
 
-    customer_id = (prefs.data or {}).get("stripe_customer_id")
+    customer_id = (prefs or {}).get("stripe_customer_id")
 
     if not customer_id:
         customer = stripe.Customer.create(
@@ -77,13 +72,18 @@ async def create_checkout_session(
         customer_id = customer.id
 
         # Upsert preferences with customer ID
-        db.table("user_preferences").upsert(
-            {
-                "user_id": user["user_id"],
-                "stripe_customer_id": customer_id,
-            },
-            on_conflict="user_id",
-        ).execute()
+        pool = get_pool()
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO user_preferences (user_id, stripe_customer_id)
+                    VALUES (%s, %s)
+                    ON CONFLICT (user_id) DO UPDATE SET stripe_customer_id = EXCLUDED.stripe_customer_id
+                    """,
+                    (user["user_id"], customer_id),
+                )
+            conn.commit()
 
     session = stripe.checkout.Session.create(
         customer=customer_id,
@@ -117,7 +117,7 @@ async def stripe_webhook(request: Request):
         logger.error(f"Webhook error: {e}")
         raise HTTPException(status_code=400, detail="Webhook error")
 
-    db = get_supabase()
+    pool = get_pool()
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
@@ -125,15 +125,20 @@ async def stripe_webhook(request: Request):
         subscription_id = session.get("subscription")
 
         if user_id:
-            db.table("user_preferences").upsert(
-                {
-                    "user_id": user_id,
-                    "tier": "pro",
-                    "stripe_subscription_id": subscription_id,
-                    "stripe_customer_id": session.get("customer"),
-                },
-                on_conflict="user_id",
-            ).execute()
+            with pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO user_preferences (user_id, tier, stripe_subscription_id, stripe_customer_id)
+                        VALUES (%s, 'pro', %s, %s)
+                        ON CONFLICT (user_id) DO UPDATE SET
+                            tier = 'pro',
+                            stripe_subscription_id = EXCLUDED.stripe_subscription_id,
+                            stripe_customer_id = EXCLUDED.stripe_customer_id
+                        """,
+                        (user_id, subscription_id, session.get("customer")),
+                    )
+                conn.commit()
             logger.info(f"User {user_id} upgraded to Pro")
 
     elif event["type"] == "customer.subscription.deleted":
@@ -141,19 +146,24 @@ async def stripe_webhook(request: Request):
         sub_id = subscription.get("id")
 
         # Find user by subscription ID and downgrade
-        result = (
-            db.table("user_preferences")
-            .select("user_id")
-            .eq("stripe_subscription_id", sub_id)
-            .single()
-            .execute()
+        result = fetch_one(
+            "SELECT user_id FROM user_preferences WHERE stripe_subscription_id = %s",
+            (sub_id,),
         )
 
-        if result.data:
-            user_id = result.data["user_id"]
-            db.table("user_preferences").update(
-                {"tier": "free", "stripe_subscription_id": None}
-            ).eq("user_id", user_id).execute()
+        if result:
+            user_id = result["user_id"]
+            with pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        UPDATE user_preferences
+                        SET tier = 'free', stripe_subscription_id = NULL
+                        WHERE user_id = %s
+                        """,
+                        (user_id,),
+                    )
+                conn.commit()
             logger.info(f"User {user_id} downgraded to Free")
 
     return {"received": True}
@@ -168,17 +178,12 @@ async def get_billing_portal(user: dict = Depends(get_current_user)):
     if not settings.stripe_secret_key:
         raise HTTPException(status_code=503, detail="Billing not configured")
 
-    db = get_supabase()
-
-    prefs = (
-        db.table("user_preferences")
-        .select("stripe_customer_id")
-        .eq("user_id", user["user_id"])
-        .single()
-        .execute()
+    prefs = fetch_one(
+        "SELECT stripe_customer_id FROM user_preferences WHERE user_id = %s",
+        (user["user_id"],),
     )
 
-    customer_id = (prefs.data or {}).get("stripe_customer_id")
+    customer_id = (prefs or {}).get("stripe_customer_id")
     if not customer_id:
         raise HTTPException(
             status_code=404, detail="No billing account found. Please subscribe first."
