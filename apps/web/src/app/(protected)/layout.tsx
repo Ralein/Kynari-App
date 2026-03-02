@@ -1,5 +1,6 @@
-import { createClient } from "@/lib/supabase/server";
+import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 
 export default async function ProtectedLayout({
@@ -7,14 +8,13 @@ export default async function ProtectedLayout({
 }: {
     children: React.ReactNode;
 }) {
-    const supabase = await createClient();
-    const {
-        data: { user },
-    } = await supabase.auth.getUser();
+    const user = await currentUser();
 
     if (!user) {
         redirect("/login");
     }
+
+    const email = user.emailAddresses[0]?.emailAddress;
 
     return (
         <div className="min-h-screen bg-surface">
@@ -32,16 +32,16 @@ export default async function ProtectedLayout({
 
                     <div className="flex items-center gap-4">
                         <span className="text-sm text-text-muted hidden sm:block">
-                            {user.email}
+                            {email}
                         </span>
-                        <form action="/auth/signout" method="post">
-                            <button
-                                type="submit"
-                                className="text-sm text-text-muted hover:text-red-500 transition-colors font-medium"
-                            >
-                                Sign out
-                            </button>
-                        </form>
+                        <UserButton
+                            afterSignOutUrl="/login"
+                            appearance={{
+                                elements: {
+                                    avatarBox: "w-8 h-8",
+                                },
+                            }}
+                        />
                     </div>
                 </div>
             </header>

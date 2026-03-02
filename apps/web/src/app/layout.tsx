@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ClerkProvider } from "@clerk/nextjs";
 import { Outfit, Inter } from "next/font/google";
 import "./globals.css";
 
@@ -43,8 +44,19 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${outfit.variable} ${inter.variable}`}>
-      <body className="min-h-screen bg-surface antialiased">{children}</body>
-    </html>
+    <ClerkProvider
+      appearance={{
+        cssLayerName: "clerk",
+        variables: {
+          colorPrimary: "#0d9488",
+          colorTextOnPrimaryBackground: "#ffffff",
+          borderRadius: "0.75rem",
+        },
+      }}
+    >
+      <html lang="en" className={`${outfit.variable} ${inter.variable}`}>
+        <body className="min-h-screen bg-surface antialiased">{children}</body>
+      </html>
+    </ClerkProvider>
   );
 }
