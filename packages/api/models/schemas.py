@@ -32,7 +32,7 @@ class ChildResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    parent_id: UUID
+    parent_id: str
     name: str
     date_of_birth: date
     created_at: datetime
