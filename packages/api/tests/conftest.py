@@ -19,10 +19,15 @@ class MockTable:
         return self
 
     def insert(self, data):
+        """Simulate DB insert — merges DB-generated defaults into input."""
+        defaults = {
+            "id": "mock-generated-id",
+            "created_at": "2026-01-01T00:00:00Z",
+        }
         if isinstance(data, list):
-            self._response.data = data
+            self._response.data = [{**defaults, **row} for row in data]
         else:
-            self._response.data = [data]
+            self._response.data = [{**defaults, **data}]
         return self
 
     def upsert(self, data, **kwargs):
