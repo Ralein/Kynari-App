@@ -91,7 +91,11 @@ async def update_child(
 
 @router.delete("/{child_id}")
 async def delete_child(child_id: str, user: dict = Depends(get_current_user)):
-    """Delete a child and all associated data (cascade via FK)."""
+    """Delete a child and all associated data (COPPA right-to-delete).
+
+    Explicitly purges all child data before removing the profile,
+    ensuring a complete audit trail of the deletion.
+    """
     db = get_supabase()
 
     # Verify ownership
@@ -107,6 +111,16 @@ async def delete_child(child_id: str, user: dict = Depends(get_current_user)):
     if not existing.data:
         raise HTTPException(status_code=404, detail="Child not found")
 
+    # Explicit data purge (creates audit trail)
+    from services.data_retention import data_retention
+
+    purge_result = await data_retention.purge_all_child_data(child_id)
+
+    # Delete the child profile (FK CASCADE handles any remaining refs)
     db.table("children").delete().eq("id", child_id).execute()
 
-    return {"deleted": True, "child_id": child_id}
+    return {
+        "deleted": True,
+        "child_id": child_id,
+        **purge_result,
+    }
