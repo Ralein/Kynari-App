@@ -97,3 +97,18 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 );
 
 CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_logs(user_id, timestamp);
+
+-- ─── Analysis Sessions ─────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS analysis_sessions (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    child_id        UUID NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+    parent_id       TEXT NOT NULL,
+    modality        TEXT NOT NULL,
+    raw_result      JSONB NOT NULL,
+    emotion_label   TEXT NOT NULL,
+    confidence      REAL NOT NULL,
+    created_at      TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_analysis_child ON analysis_sessions(child_id, created_at);

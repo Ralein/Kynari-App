@@ -31,6 +31,12 @@ export default async function ProtectedLayout({
                     </Link>
 
                     <div className="flex items-center gap-4">
+                        <Link
+                            href="/analyze"
+                            className="text-sm font-medium text-teal-700 hover:text-teal-900 transition-colors hidden sm:block"
+                        >
+                            🔍 Analyze
+                        </Link>
                         <span className="text-sm text-text-muted hidden sm:block">
                             {email}
                         </span>

@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import get_settings
-from routers import children, events, summaries
+from routers import children, events, summaries, analyze
 from middleware.rate_limit import RateLimitMiddleware
 from middleware.audit import AuditLogMiddleware
 
@@ -43,7 +43,7 @@ async def add_security_headers(request: Request, call_next) -> Response:
     )
     response.headers["X-XSS-Protection"] = "0"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Permissions-Policy"] = "camera=(self), microphone=(self), geolocation=()"
     return response
 
 
@@ -64,6 +64,7 @@ app.add_middleware(
 app.include_router(children.router)
 app.include_router(events.router)
 app.include_router(summaries.router)
+app.include_router(analyze.router)
 
 
 # ─── Health Check ────────────────────────────────────────────
