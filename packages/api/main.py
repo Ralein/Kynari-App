@@ -11,9 +11,9 @@ from routers import children, events, summaries
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan — startup and shutdown hooks."""
-    # Startup: warm up database connection
-    from database import get_supabase
-    get_supabase()
+    # Startup: attempt database connection (graceful if credentials missing)
+    from database import try_connect_supabase
+    try_connect_supabase()
     yield
     # Shutdown: cleanup if needed
 
