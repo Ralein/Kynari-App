@@ -9,7 +9,7 @@ from models.schemas import (
     HourlyGroup,
     DailySummaryResponse,
 )
-from database import get_supabase
+from database import fetch_one, fetch_all, execute_returning_all, get_pool
 from services.baseline_engine import baseline_engine
 from services.summary_generator import summary_generator
 from collections import defaultdict
@@ -20,16 +20,11 @@ router = APIRouter(prefix="/events", tags=["events"])
 
 def _verify_child_ownership(child_id: str, user_id: str) -> None:
     """Verify the child belongs to the authenticated parent."""
-    db = get_supabase()
-    result = (
-        db.table("children")
-        .select("id")
-        .eq("id", child_id)
-        .eq("parent_id", user_id)
-        .single()
-        .execute()
+    row = fetch_one(
+        "SELECT id FROM children WHERE id = %s AND parent_id = %s",
+        (child_id, user_id),
     )
-    if not result.data:
+    if not row:
         raise HTTPException(status_code=404, detail="Child not found or access denied")
 
 
@@ -45,25 +40,40 @@ async def batch_create_events(
     """
     _verify_child_ownership(body.child_id, user["user_id"])
 
-    db = get_supabase()
+    # Build multi-row INSERT
+    if not body.events:
+        return BatchEventsResponse(received=0, session_id=body.session_id)
 
-    # Prepare rows for batch insert
-    rows = []
-    for event in body.events:
-        rows.append(
-            {
-                "child_id": body.child_id,
-                "session_id": body.session_id,
-                "emotion_label": event.emotion_label,
-                "confidence": event.confidence,
-                "modality": event.modality,
-                "timestamp": event.timestamp.isoformat(),
-            }
+    values = []
+    params = []
+    for i, event in enumerate(body.events):
+        base = i * 6
+        values.append(
+            f"(%s, %s, %s, %s, %s, %s)"
         )
+        params.extend([
+            body.child_id,
+            body.session_id,
+            event.emotion_label,
+            event.confidence,
+            event.modality,
+            event.timestamp.isoformat(),
+        ])
 
-    result = db.table("emotion_events").insert(rows).execute()
+    sql = f"""
+        INSERT INTO emotion_events (child_id, session_id, emotion_label, confidence, modality, timestamp)
+        VALUES {', '.join(values)}
+        RETURNING *
+    """
 
-    if not result.data:
+    pool = get_pool()
+    with pool.connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+        conn.commit()
+
+    if not rows:
         raise HTTPException(status_code=500, detail="Failed to store events")
 
     # Phase 1: Trigger baseline recalculation in background
@@ -72,7 +82,7 @@ async def batch_create_events(
     )
 
     return BatchEventsResponse(
-        received=len(result.data),
+        received=len(rows),
         session_id=body.session_id,
     )
 
@@ -87,21 +97,31 @@ async def get_events_by_date(
     """Get emotion events for a child on a specific date."""
     _verify_child_ownership(child_id, user["user_id"])
 
-    db = get_supabase()
-    query = (
-        db.table("emotion_events")
-        .select("*")
-        .eq("child_id", child_id)
-        .gte("timestamp", f"{date}T00:00:00Z")
-        .lt("timestamp", f"{date}T23:59:59Z")
-        .order("timestamp")
-    )
-
     if session_id:
-        query = query.eq("session_id", session_id)
+        rows = fetch_all(
+            """
+            SELECT * FROM emotion_events
+            WHERE child_id = %s
+              AND timestamp >= %s
+              AND timestamp < %s
+              AND session_id = %s
+            ORDER BY timestamp
+            """,
+            (child_id, f"{date}T00:00:00Z", f"{date}T23:59:59Z", session_id),
+        )
+    else:
+        rows = fetch_all(
+            """
+            SELECT * FROM emotion_events
+            WHERE child_id = %s
+              AND timestamp >= %s
+              AND timestamp < %s
+            ORDER BY timestamp
+            """,
+            (child_id, f"{date}T00:00:00Z", f"{date}T23:59:59Z"),
+        )
 
-    result = query.execute()
-    return result.data or []
+    return rows
 
 
 @router.get("/{child_id}/timeline", response_model=list[HourlyGroup])
@@ -113,23 +133,22 @@ async def get_timeline(
     """Get events grouped by hour for the hourly chart."""
     _verify_child_ownership(child_id, user["user_id"])
 
-    db = get_supabase()
-    result = (
-        db.table("emotion_events")
-        .select("*")
-        .eq("child_id", child_id)
-        .gte("timestamp", f"{date}T00:00:00Z")
-        .lt("timestamp", f"{date}T23:59:59Z")
-        .order("timestamp")
-        .execute()
+    events = fetch_all(
+        """
+        SELECT * FROM emotion_events
+        WHERE child_id = %s
+          AND timestamp >= %s
+          AND timestamp < %s
+        ORDER BY timestamp
+        """,
+        (child_id, f"{date}T00:00:00Z", f"{date}T23:59:59Z"),
     )
-
-    events = result.data or []
 
     # Group by hour
     hourly: dict[int, list] = defaultdict(list)
     for event in events:
-        hour = int(event["timestamp"][11:13])
+        ts = str(event["timestamp"])
+        hour = int(ts[11:13])
         hourly[hour].append(event)
 
     # Build response

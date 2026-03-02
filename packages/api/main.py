@@ -13,11 +13,12 @@ from middleware.audit import AuditLogMiddleware
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan — startup and shutdown hooks."""
-    # Startup: attempt database connection (graceful if credentials missing)
-    from database import try_connect_supabase
-    try_connect_supabase()
+    from database import try_connect_db
+    try_connect_db()
     yield
-    # Shutdown: cleanup if needed
+    # Shutdown: close connection pool
+    from database import close_pool
+    close_pool()
 
 
 settings = get_settings()

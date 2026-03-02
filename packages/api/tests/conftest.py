@@ -27,93 +27,98 @@ def client(mock_auth):
     app.dependency_overrides.clear()
 
 
-@pytest.fixture
-def mock_supabase():
-    """Create a MagicMock Supabase client for unit-testing services."""
-    mock = MagicMock()
-    with patch("database.get_supabase", return_value=mock):
-        yield mock
+# ─── Mock Database ───────────────────────────────────────────
 
 
-# ─── Mock Supabase Client ────────────────────────────────────
-
-class MockTable:
-    """Mock Supabase table with chainable query builder."""
+class MockCursor:
+    """Mock psycopg cursor with dict_row behaviour."""
 
     def __init__(self, data=None):
         self._data = data or []
-        self._response = MagicMock()
-        self._response.data = self._data
+        self._idx = 0
 
-    def select(self, *args):
+    def execute(self, sql, params=None):
+        pass
+
+    def fetchone(self):
+        if self._data and isinstance(self._data, list) and len(self._data) > 0:
+            if isinstance(self._data[0], dict):
+                return self._data[0]
+        return self._data if isinstance(self._data, dict) else None
+
+    def fetchall(self):
+        if isinstance(self._data, list):
+            return self._data
+        return [self._data] if self._data else []
+
+    def __enter__(self):
         return self
 
-    def insert(self, data):
-        """Simulate DB insert — merges DB-generated defaults into input."""
-        defaults = {
-            "id": "mock-generated-id",
-            "created_at": "2026-01-01T00:00:00Z",
-        }
-        if isinstance(data, list):
-            self._response.data = [{**defaults, **row} for row in data]
-        else:
-            self._response.data = [{**defaults, **data}]
+    def __exit__(self, *args):
+        pass
+
+
+class MockConnection:
+    """Mock psycopg connection."""
+
+    def __init__(self, data=None):
+        self._data = data
+
+    def cursor(self):
+        return MockCursor(self._data)
+
+    def commit(self):
+        pass
+
+    def __enter__(self):
         return self
 
-    def upsert(self, data, **kwargs):
-        self._response.data = [data]
-        return self
-
-    def update(self, data):
-        self._response.data = [data]
-        return self
-
-    def delete(self):
-        return self
-
-    def eq(self, *args):
-        return self
-
-    def gte(self, *args):
-        return self
-
-    def lt(self, *args):
-        return self
-
-    def lte(self, *args):
-        return self
-
-    def order(self, *args):
-        return self
-
-    def single(self):
-        if self._data:
-            self._response.data = self._data[0]
-        else:
-            self._response.data = None
-        return self
-
-    def execute(self):
-        return self._response
+    def __exit__(self, *args):
+        pass
 
 
-class MockSupabase:
-    """Mock Supabase client."""
+class MockPool:
+    """Mock psycopg connection pool."""
 
     def __init__(self):
-        self._tables: dict[str, MockTable] = {}
+        self._table_data: dict[str, list] = {}
+        self._default_data = []
 
-    def set_table_data(self, table_name: str, data: list):
-        self._tables[table_name] = MockTable(data)
+    def set_data(self, data):
+        self._default_data = data
 
-    def table(self, name: str):
-        return self._tables.get(name, MockTable([]))
+    def connection(self):
+        return MockConnection(self._default_data)
 
 
 @pytest.fixture
-def mock_db():
-    """Create a mock Supabase client."""
-    return MockSupabase()
+def mock_pool():
+    """Create a mock database pool."""
+    pool = MockPool()
+    with patch("database.get_pool", return_value=pool):
+        yield pool
+
+
+@pytest.fixture
+def mock_db_functions():
+    """Mock all database query helper functions for isolated unit tests."""
+    with patch("database.fetch_one") as mock_fetch_one, \
+         patch("database.fetch_all") as mock_fetch_all, \
+         patch("database.execute") as mock_execute, \
+         patch("database.execute_returning") as mock_execute_returning, \
+         patch("database.execute_returning_all") as mock_execute_returning_all, \
+         patch("database.get_pool") as mock_get_pool:
+
+        mock_get_pool.return_value = MockPool()
+
+        yield {
+            "fetch_one": mock_fetch_one,
+            "fetch_all": mock_fetch_all,
+            "execute": mock_execute,
+            "execute_returning": mock_execute_returning,
+            "execute_returning_all": mock_execute_returning_all,
+            "get_pool": mock_get_pool,
+        }
 
 
 @pytest.fixture

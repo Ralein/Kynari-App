@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from middleware.auth import get_current_user
 from models.schemas import DailySummaryResponse, BaselineStatusResponse
-from database import get_supabase
+from database import fetch_one, fetch_all
 from services.summary_generator import summary_generator
 from datetime import date, timedelta
 
@@ -13,16 +13,11 @@ EMOTION_LABELS = ["happy", "sad", "angry", "fearful", "neutral", "frustrated"]
 
 
 def _verify_child_ownership(child_id: str, user_id: str) -> None:
-    db = get_supabase()
-    result = (
-        db.table("children")
-        .select("id")
-        .eq("id", child_id)
-        .eq("parent_id", user_id)
-        .single()
-        .execute()
+    row = fetch_one(
+        "SELECT id FROM children WHERE id = %s AND parent_id = %s",
+        (child_id, user_id),
     )
-    if not result.data:
+    if not row:
         raise HTTPException(status_code=404, detail="Child not found or access denied")
 
 
@@ -31,18 +26,12 @@ async def get_today_summary(child_id: str, user: dict = Depends(get_current_user
     """Get today's daily summary for a child."""
     _verify_child_ownership(child_id, user["user_id"])
 
-    db = get_supabase()
     today = date.today().isoformat()
-    result = (
-        db.table("daily_summaries")
-        .select("*")
-        .eq("child_id", child_id)
-        .eq("date", today)
-        .single()
-        .execute()
+    row = fetch_one(
+        "SELECT * FROM daily_summaries WHERE child_id = %s AND date = %s",
+        (child_id, today),
     )
-
-    return result.data
+    return row
 
 
 @router.get("/{child_id}/week", response_model=list[DailySummaryResponse])
@@ -50,18 +39,16 @@ async def get_week_summaries(child_id: str, user: dict = Depends(get_current_use
     """Get the last 7 days of daily summaries."""
     _verify_child_ownership(child_id, user["user_id"])
 
-    db = get_supabase()
     week_ago = (date.today() - timedelta(days=7)).isoformat()
-    result = (
-        db.table("daily_summaries")
-        .select("*")
-        .eq("child_id", child_id)
-        .gte("date", week_ago)
-        .order("date")
-        .execute()
+    rows = fetch_all(
+        """
+        SELECT * FROM daily_summaries
+        WHERE child_id = %s AND date >= %s
+        ORDER BY date
+        """,
+        (child_id, week_ago),
     )
-
-    return result.data or []
+    return rows
 
 
 @router.get("/{child_id}/week/narrative")
@@ -77,7 +64,6 @@ async def get_weekly_narrative(
     _verify_child_ownership(child_id, user["user_id"])
 
     if week_start is None:
-        # Default to Monday of current week
         today = date.today()
         monday = today - timedelta(days=today.weekday())
         week_start = monday.isoformat()
@@ -98,20 +84,17 @@ async def get_patterns(
     """
     _verify_child_ownership(child_id, user["user_id"])
 
-    db = get_supabase()
     start_date = (date.today() - timedelta(days=days)).isoformat()
 
-    # Fetch daily summaries for the period
-    result = (
-        db.table("daily_summaries")
-        .select("date, dominant_emotion, emotion_distribution, total_events")
-        .eq("child_id", child_id)
-        .gte("date", start_date)
-        .order("date")
-        .execute()
+    summaries = fetch_all(
+        """
+        SELECT date, dominant_emotion, emotion_distribution, total_events
+        FROM daily_summaries
+        WHERE child_id = %s AND date >= %s
+        ORDER BY date
+        """,
+        (child_id, start_date),
     )
-
-    summaries = result.data or []
 
     if not summaries:
         return {
@@ -155,15 +138,10 @@ async def get_baseline_status(child_id: str, user: dict = Depends(get_current_us
     """Get baseline calibration status for a child."""
     _verify_child_ownership(child_id, user["user_id"])
 
-    db = get_supabase()
-    result = (
-        db.table("child_baselines")
-        .select("*")
-        .eq("child_id", child_id)
-        .execute()
+    baselines = fetch_all(
+        "SELECT * FROM child_baselines WHERE child_id = %s",
+        (child_id,),
     )
-
-    baselines = result.data or []
 
     if not baselines:
         return BaselineStatusResponse(
@@ -227,4 +205,3 @@ async def get_ai_weekly_report(
         "generated_at": date.today().isoformat(),
         "cached": False,
     }
-

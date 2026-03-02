@@ -38,19 +38,26 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
 
         # Log asynchronously (don't block the response)
         try:
-            from database import get_supabase
+            from database import get_pool
 
-            db = get_supabase()
-            db.table("audit_logs").insert(
-                {
-                    "user_id": user_id,
-                    "action": f"{request.method} {request.url.path}",
-                    "resource_path": request.url.path,
-                    "status_code": response.status_code,
-                    "ip_address": ip_address,
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                }
-            ).execute()
+            pool = get_pool()
+            with pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO audit_logs (user_id, action, resource_path, status_code, ip_address, timestamp)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                        """,
+                        (
+                            user_id,
+                            f"{request.method} {request.url.path}",
+                            request.url.path,
+                            response.status_code,
+                            ip_address,
+                            datetime.now(timezone.utc).isoformat(),
+                        ),
+                    )
+                conn.commit()
         except Exception as e:
             # Never let audit logging break the API
             logger.warning(f"Failed to write audit log: {e}")
