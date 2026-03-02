@@ -181,3 +181,50 @@ async def get_baseline_status(child_id: str, user: dict = Depends(get_current_us
         days_of_data=days,
         days_remaining=max(0, 7 - days),
     )
+
+
+# ─── AI Weekly Report ───────────────────────────────────────
+
+
+@router.get("/{child_id}/ai-report")
+async def get_ai_weekly_report(
+    child_id: str,
+    week_start: str | None = None,
+    user: dict = Depends(get_current_user),
+):
+    """Get an AI-generated weekly narrative report.
+
+    Uses Claude to create a warm, parent-friendly summary of the
+    child's emotional patterns for the week. Falls back to a
+    template-based summary if the Anthropic API key is not set.
+    """
+    _verify_child_ownership(child_id, user["user_id"])
+
+    if week_start is None:
+        today = date.today()
+        monday = today - timedelta(days=today.weekday())
+        ws = monday
+    else:
+        ws = date.fromisoformat(week_start)
+
+    from services.ai_report import ai_report
+
+    # Check if report already exists
+    existing = await ai_report.get_weekly_report(child_id, ws)
+    if existing:
+        return {
+            "narrative": existing["narrative"],
+            "week_start": ws.isoformat(),
+            "generated_at": existing.get("created_at"),
+            "cached": True,
+        }
+
+    # Generate new report
+    narrative = await ai_report.generate_weekly_narrative(child_id, ws)
+    return {
+        "narrative": narrative,
+        "week_start": ws.isoformat(),
+        "generated_at": date.today().isoformat(),
+        "cached": False,
+    }
+
