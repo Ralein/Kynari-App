@@ -4,9 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from middleware.auth import get_current_user
 from models.schemas import DailySummaryResponse, BaselineStatusResponse
 from database import get_supabase
+from services.summary_generator import summary_generator
 from datetime import date, timedelta
 
 router = APIRouter(prefix="/summaries", tags=["summaries"])
+
+EMOTION_LABELS = ["happy", "sad", "angry", "fearful", "neutral", "frustrated"]
 
 
 def _verify_child_ownership(child_id: str, user_id: str) -> None:
@@ -61,6 +64,28 @@ async def get_week_summaries(child_id: str, user: dict = Depends(get_current_use
     return result.data or []
 
 
+@router.get("/{child_id}/week/narrative")
+async def get_weekly_narrative(
+    child_id: str,
+    week_start: str | None = None,
+    user: dict = Depends(get_current_user),
+):
+    """
+    Get a weekly narrative summary with trend analysis.
+    Defaults to the current week (Monday start).
+    """
+    _verify_child_ownership(child_id, user["user_id"])
+
+    if week_start is None:
+        # Default to Monday of current week
+        today = date.today()
+        monday = today - timedelta(days=today.weekday())
+        week_start = monday.isoformat()
+
+    result = await summary_generator.generate_weekly(child_id, week_start)
+    return result
+
+
 @router.get("/{child_id}/patterns")
 async def get_patterns(
     child_id: str,
@@ -69,15 +94,59 @@ async def get_patterns(
 ):
     """
     Get emotion frequency patterns over time.
-    Placeholder — full implementation in Phase 2.
+    Returns per-emotion daily frequency for the last N days.
     """
     _verify_child_ownership(child_id, user["user_id"])
+
+    db = get_supabase()
+    start_date = (date.today() - timedelta(days=days)).isoformat()
+
+    # Fetch daily summaries for the period
+    result = (
+        db.table("daily_summaries")
+        .select("date, dominant_emotion, emotion_distribution, total_events")
+        .eq("child_id", child_id)
+        .gte("date", start_date)
+        .order("date")
+        .execute()
+    )
+
+    summaries = result.data or []
+
+    if not summaries:
+        return {
+            "child_id": child_id,
+            "days": days,
+            "days_with_data": 0,
+            "patterns": [],
+            "emotion_trends": {},
+            "message": "No data available for this period. Start recording to build patterns.",
+        }
+
+    # Build per-emotion time series
+    emotion_trends: dict[str, list[dict]] = {e: [] for e in EMOTION_LABELS}
+
+    for summary in summaries:
+        dist = summary.get("emotion_distribution", {})
+        for emotion in EMOTION_LABELS:
+            emotion_trends[emotion].append({
+                "date": summary["date"],
+                "percentage": dist.get(emotion, 0),
+            })
+
+    # Detect overall dominant pattern
+    dominant_counts: dict[str, int] = {}
+    for summary in summaries:
+        dom = summary["dominant_emotion"]
+        dominant_counts[dom] = dominant_counts.get(dom, 0) + 1
 
     return {
         "child_id": child_id,
         "days": days,
-        "patterns": [],
-        "message": "Pattern analysis will be available after 7 days of baseline data.",
+        "days_with_data": len(summaries),
+        "dominant_distribution": dominant_counts,
+        "emotion_trends": emotion_trends,
+        "patterns": summaries,
     }
 
 

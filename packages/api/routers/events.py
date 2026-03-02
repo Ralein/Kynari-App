@@ -7,9 +7,13 @@ from models.schemas import (
     BatchEventsResponse,
     EmotionEventResponse,
     HourlyGroup,
+    DailySummaryResponse,
 )
 from database import get_supabase
+from services.baseline_engine import baseline_engine
+from services.summary_generator import summary_generator
 from collections import defaultdict
+from datetime import date
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -37,7 +41,7 @@ async def batch_create_events(
 ):
     """
     Ingest a batch of emotion events from a monitoring session.
-    Validates ownership, stores events, triggers background summary generation.
+    Validates ownership, stores events, triggers background baseline recalculation.
     """
     _verify_child_ownership(body.child_id, user["user_id"])
 
@@ -62,10 +66,10 @@ async def batch_create_events(
     if not result.data:
         raise HTTPException(status_code=500, detail="Failed to store events")
 
-    # TODO Phase 1: Trigger baseline recalculation in background
-    # background_tasks.add_task(baseline_engine.ingest_events, body.child_id, body.events)
-    # TODO Phase 2: Trigger daily summary generation
-    # background_tasks.add_task(summary_generator.generate, body.child_id)
+    # Phase 1: Trigger baseline recalculation in background
+    background_tasks.add_task(
+        baseline_engine.ingest_events, body.child_id, body.events
+    )
 
     return BatchEventsResponse(
         received=len(result.data),
@@ -147,3 +151,29 @@ async def get_timeline(
         )
 
     return groups
+
+
+@router.post("/{child_id}/generate-summary", response_model=DailySummaryResponse | None)
+async def generate_summary(
+    child_id: str,
+    target_date: str | None = None,
+    user: dict = Depends(get_current_user),
+):
+    """
+    On-demand summary generation for a specific date (defaults to today).
+    Useful for manual triggers and debugging.
+    """
+    _verify_child_ownership(child_id, user["user_id"])
+
+    if target_date is None:
+        target_date = date.today().isoformat()
+
+    result = await summary_generator.generate_daily(child_id, target_date)
+
+    if not result:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No events found for {target_date}",
+        )
+
+    return result
