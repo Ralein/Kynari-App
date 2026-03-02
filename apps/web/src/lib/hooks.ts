@@ -1,8 +1,7 @@
 "use client";
 
 import useSWR from "swr";
-import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@clerk/nextjs";
 import {
     getChildren,
     getChild,
@@ -15,24 +14,15 @@ import {
 // ─── Token Hook ─────────────────────────────────────────────
 
 export function useToken() {
-    const [token, setToken] = useState<string | null>(null);
+    const { getToken, isSignedIn } = useAuth();
 
-    useEffect(() => {
-        const supabase = createClient();
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setToken(session?.access_token ?? null);
-        });
+    const { data: token } = useSWR(
+        isSignedIn ? "clerk-token" : null,
+        () => getToken(),
+        { revalidateOnFocus: false, dedupingInterval: 60000 }
+    );
 
-        const {
-            data: { subscription },
-        } = supabase.auth.onAuthStateChange((_event, session) => {
-            setToken(session?.access_token ?? null);
-        });
-
-        return () => subscription.unsubscribe();
-    }, []);
-
-    return token;
+    return token ?? null;
 }
 
 // ─── Children ───────────────────────────────────────────────

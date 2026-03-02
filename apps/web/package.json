@@ -12,6 +12,7 @@
     "clean": "rm -rf .next .turbo node_modules"
   },
   "dependencies": {
+    "@clerk/nextjs": "^6.39.0",
     "@kynari/shared": "workspace:*",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.98.0",

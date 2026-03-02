@@ -1,36 +1,7 @@
-"use client";
-
-import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { SignIn } from "@clerk/nextjs";
 import Link from "next/link";
 
 export default function LoginPage() {
-    const [email, setEmail] = useState("");
-    const [loading, setLoading] = useState(false);
-    const [sent, setSent] = useState(false);
-    const [error, setError] = useState("");
-    const supabase = createClient();
-
-    async function handleLogin(e: React.FormEvent) {
-        e.preventDefault();
-        setLoading(true);
-        setError("");
-
-        const { error } = await supabase.auth.signInWithOtp({
-            email,
-            options: {
-                emailRedirectTo: `${window.location.origin}/auth/callback`,
-            },
-        });
-
-        if (error) {
-            setError(error.message);
-        } else {
-            setSent(true);
-        }
-        setLoading(false);
-    }
-
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-teal-50 via-white to-stone-50 px-4">
             {/* Background orbs */}
@@ -50,79 +21,18 @@ export default function LoginPage() {
                     </Link>
                 </div>
 
-                {/* Card */}
-                <div className="glass rounded-2xl p-8 shadow-xl shadow-stone-900/5">
-                    {sent ? (
-                        <div className="text-center py-4">
-                            <div className="w-16 h-16 rounded-full bg-teal-100 flex items-center justify-center mx-auto mb-4">
-                                <span className="text-3xl">✉️</span>
-                            </div>
-                            <h2 className="text-xl font-semibold mb-2 font-[family-name:var(--font-sans)]">
-                                Check your email
-                            </h2>
-                            <p className="text-text-secondary text-sm leading-relaxed">
-                                We&apos;ve sent a magic link to{" "}
-                                <span className="font-medium text-teal-700">{email}</span>.
-                                Click the link to sign in.
-                            </p>
-                            <button
-                                onClick={() => setSent(false)}
-                                className="mt-6 text-sm text-teal-600 hover:text-teal-700 font-medium transition-colors"
-                            >
-                                Use a different email
-                            </button>
-                        </div>
-                    ) : (
-                        <>
-                            <h2 className="text-2xl font-semibold text-center mb-2 font-[family-name:var(--font-sans)]">
-                                Welcome back
-                            </h2>
-                            <p className="text-text-secondary text-sm text-center mb-8">
-                                Sign in with a magic link — no password needed.
-                            </p>
-
-                            <form onSubmit={handleLogin} className="space-y-4">
-                                <div>
-                                    <label
-                                        htmlFor="email"
-                                        className="block text-sm font-medium text-text-primary mb-1.5"
-                                    >
-                                        Email address
-                                    </label>
-                                    <input
-                                        id="email"
-                                        type="email"
-                                        value={email}
-                                        onChange={(e) => setEmail(e.target.value)}
-                                        placeholder="you@example.com"
-                                        required
-                                        className="w-full px-4 py-3 rounded-xl border border-stone-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 transition-all placeholder:text-text-muted"
-                                    />
-                                </div>
-
-                                {error && (
-                                    <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">
-                                        {error}
-                                    </p>
-                                )}
-
-                                <button
-                                    type="submit"
-                                    disabled={loading}
-                                    className="w-full py-3 rounded-xl bg-gradient-to-r from-teal-600 to-teal-500 text-white font-semibold text-sm shadow-lg shadow-teal-500/20 hover:shadow-teal-500/30 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200 hover:scale-[1.01]"
-                                >
-                                    {loading ? (
-                                        <span className="flex items-center justify-center gap-2">
-                                            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                            Sending link...
-                                        </span>
-                                    ) : (
-                                        "Send magic link"
-                                    )}
-                                </button>
-                            </form>
-                        </>
-                    )}
+                {/* Clerk Sign-In */}
+                <div className="flex justify-center">
+                    <SignIn
+                        routing="hash"
+                        forceRedirectUrl="/dashboard"
+                        appearance={{
+                            elements: {
+                                rootBox: "w-full",
+                                card: "shadow-xl shadow-stone-900/5 rounded-2xl",
+                            },
+                        }}
+                    />
                 </div>
 
                 {/* Footer */}
