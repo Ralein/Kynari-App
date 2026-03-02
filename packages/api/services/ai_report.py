@@ -90,14 +90,20 @@ class AIReportService:
         summaries: list[dict],
         api_key: str,
     ) -> str:
-        """Call Anthropic Claude API to generate narrative."""
+        """Call Anthropic Claude API to generate narrative using LangChain."""
         if not api_key:
             return self._generate_fallback(child_name, summaries)
 
         try:
-            import anthropic
+            from langchain_anthropic import ChatAnthropic
+            from langchain_core.prompts import ChatPromptTemplate
+            from langchain_core.messages import SystemMessage
 
-            client = anthropic.Anthropic(api_key=api_key)
+            llm = ChatAnthropic(
+                model_name="claude-3-5-sonnet-20240620",
+                api_key=api_key,
+                max_tokens=300,
+            )
 
             # Build summary digest
             digest_lines = []
@@ -114,30 +120,33 @@ class AIReportService:
             dominant_emotions = [s["dominant_emotion"] for s in summaries]
             insights = [s.get("insight_text", "") for s in summaries if s.get("insight_text")]
 
-            user_prompt = (
-                f"Here is {child_name}'s emotional data for the week of "
-                f"{week_start.isoformat()}:\n\n"
-                f"Daily summaries:\n{digest}\n\n"
-                f"Notable insights: {'; '.join(insights) if insights else 'None'}\n\n"
-                f"Dominant emotions this week: {', '.join(dominant_emotions)}\n\n"
-                f"Write a warm weekly narrative for the parent. Include:\n"
-                f"1. What kind of week it was emotionally (1 sentence)\n"
-                f"2. The most notable pattern or moment (1-2 sentences)\n"
-                f"3. One gentle, actionable suggestion (1 sentence)\n"
-                f"Keep it under 200 words."
-            )
+            prompt_template = ChatPromptTemplate.from_messages([
+                SystemMessage(content=SYSTEM_PROMPT),
+                ("user", "Here is {child_name}'s emotional data for the week of {week_start}:\n\n"
+                 "Daily summaries:\n{digest}\n\n"
+                 "Notable insights: {insights}\n\n"
+                 "Dominant emotions this week: {dominant_emotions}\n\n"
+                 "Write a warm weekly narrative for the parent. Include:\n"
+                 "1. What kind of week it was emotionally (1 sentence)\n"
+                 "2. The most notable pattern or moment (1-2 sentences)\n"
+                 "3. One gentle, actionable suggestion (1 sentence)\n"
+                 "Keep it under 200 words."),
+            ])
 
-            message = client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=300,
-                system=SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_prompt}],
-            )
+            chain = prompt_template | llm
+            
+            response = await chain.ainvoke({
+                "child_name": child_name,
+                "week_start": week_start.isoformat(),
+                "digest": digest,
+                "insights": "; ".join(insights) if insights else "None",
+                "dominant_emotions": ", ".join(dominant_emotions),
+            })
 
-            return message.content[0].text
+            return response.content
 
         except Exception as e:
-            logger.error(f"Claude API error: {e}")
+            logger.error(f"Claude API error (LangChain): {e}")
             return self._generate_fallback(child_name, summaries)
 
     def _generate_fallback(self, child_name: str, summaries: list[dict]) -> str:
