@@ -65,6 +65,10 @@ cd packages/api && uv sync && uv run uvicorn main:app --reload
 
 # 5. Start the web app
 pnpm dev --filter web
+
+# 6. Start the API
+cd packages/api && uv sync && uv run uvicorn main:app --reload
+
 ```
 
 ## Dev Servers
