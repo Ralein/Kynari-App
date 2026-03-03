@@ -128,10 +128,9 @@ export async function getAIWeeklyReport(
 export interface AnalyzeImageResult {
     success: boolean;
     modality?: string;
-    emotion_label?: string;
-    confidence?: number;
-    all_emotions?: Record<string, number>;
-    face_bbox?: number[];
+    distress_score?: number;
+    distress_intensity?: string;
+    stress_features?: Record<string, number>;
     faces_detected?: number;
     error?: string;
     message?: string;
@@ -140,12 +139,13 @@ export interface AnalyzeImageResult {
 export interface AnalyzeAudioResult {
     success: boolean;
     modality?: string;
-    cry_reason?: string;
-    cry_description?: string;
-    emotion_label?: string;
+    need_label?: string;
+    need_description?: string;
     confidence?: number;
-    all_classes?: Record<string, number>;
-    audio_duration_seconds?: number;
+    secondary_need?: string;
+    all_needs?: Record<string, number>;
+    audio_features?: Record<string, number>;
+    spectrogram_b64?: string;
     error?: string;
     message?: string;
 }
@@ -153,10 +153,14 @@ export interface AnalyzeAudioResult {
 export interface AnalyzeVideoResult {
     success: boolean;
     modality?: string;
-    emotion_label?: string;
+    need_label?: string;
+    need_description?: string;
     confidence?: number;
-    face_analysis?: AnalyzeImageResult;
-    audio_analysis?: AnalyzeAudioResult;
+    secondary_need?: string;
+    all_needs?: Record<string, number>;
+    fusion_weights?: Record<string, number>;
+    audio_analysis?: Record<string, unknown>;
+    face_analysis?: Record<string, unknown>;
     frames_analyzed?: number;
     error?: string;
     message?: string;
@@ -220,9 +224,12 @@ export async function saveAnalysisResult(
     token: string,
     data: {
         child_id: string;
-        emotion_label: string;
+        need_label: string;
         confidence: number;
         modality: string;
+        secondary_need?: string;
+        all_needs?: Record<string, number>;
+        face_distress_score?: number;
         raw_result?: Record<string, unknown>;
     }
 ): Promise<SaveResultResponse> {

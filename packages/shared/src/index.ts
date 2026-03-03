@@ -110,3 +110,39 @@ export const EMOTION_COLORS: Record<EmotionLabel, string> = {
     neutral: "#9CA3AF",
     frustrated: "#FB923C",
 };
+
+// ─── Need Detection Types (Primary System) ──────────────────
+export type NeedLabel = "hungry" | "diaper" | "sleepy" | "pain" | "calm";
+export type NeedModality = "voice" | "face" | "combined" | "context_only";
+
+export const NEED_EMOJI: Record<NeedLabel, string> = {
+    hungry: "🍼",
+    diaper: "💩",
+    sleepy: "😴",
+    pain: "🤕",
+    calm: "😌",
+};
+
+export const NEED_LABELS: NeedLabel[] = [
+    "hungry",
+    "diaper",
+    "sleepy",
+    "pain",
+    "calm",
+];
+
+export const NEED_COLORS: Record<NeedLabel, string> = {
+    hungry: "#FB923C",
+    diaper: "#A78BFA",
+    sleepy: "#60A5FA",
+    pain: "#F87171",
+    calm: "#34D399",
+};
+
+export const NEED_DESCRIPTIONS: Record<NeedLabel, string> = {
+    hungry: "Your baby might be hungry",
+    diaper: "Your baby might need a diaper change",
+    sleepy: "Your baby might be tired and sleepy",
+    pain: "Your baby might have belly pain or discomfort",
+    calm: "Your baby seems calm or needs burping",
+};
