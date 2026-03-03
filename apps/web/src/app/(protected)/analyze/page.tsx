@@ -9,19 +9,25 @@ import {
     analyzeVideo,
     saveAnalysisResult,
 } from "@/lib/api";
-import { EMOTION_EMOJI } from "@kynari/shared";
+import { NEED_EMOJI, type NeedLabel } from "@kynari/shared";
 import { Camera, Mic, Upload, ChevronRight, Save, CheckCircle2, AlertCircle } from "lucide-react";
 
 type Tab = "camera" | "audio" | "upload";
 
 type AnalysisResult = {
     type: "face" | "audio" | "video";
-    emotion_label: string;
-    confidence: number;
-    all_emotions?: Record<string, number>;
-    all_classes?: Record<string, number>;
-    cry_reason?: string;
-    cry_description?: string;
+    // Need detection fields (audio / video / combined)
+    need_label?: string;
+    need_description?: string;
+    confidence?: number;
+    secondary_need?: string;
+    all_needs?: Record<string, number>;
+    // Face distress fields (image only)
+    distress_score?: number;
+    distress_intensity?: string;
+    stress_features?: Record<string, number>;
+    // Fusion metadata
+    fusion_weights?: Record<string, number>;
     raw?: Record<string, unknown>;
 };
 
@@ -100,9 +106,9 @@ export default function AnalyzePage() {
                 if (res.success) {
                     setResult({
                         type: "face",
-                        emotion_label: res.emotion_label!,
-                        confidence: res.confidence!,
-                        all_emotions: res.all_emotions,
+                        distress_score: res.distress_score,
+                        distress_intensity: res.distress_intensity,
+                        stress_features: res.stress_features,
                         raw: res as unknown as Record<string, unknown>,
                     });
                 } else {
@@ -151,11 +157,11 @@ export default function AnalyzePage() {
                     if (res.success) {
                         setResult({
                             type: "audio",
-                            emotion_label: res.emotion_label!,
-                            confidence: res.confidence!,
-                            all_classes: res.all_classes,
-                            cry_reason: res.cry_reason,
-                            cry_description: res.cry_description,
+                            need_label: res.need_label,
+                            need_description: res.need_description,
+                            confidence: res.confidence,
+                            secondary_need: res.secondary_need,
+                            all_needs: res.all_needs,
                             raw: res as unknown as Record<string, unknown>,
                         });
                     } else {
@@ -208,9 +214,9 @@ export default function AnalyzePage() {
                     if (res.success) {
                         setResult({
                             type: "face",
-                            emotion_label: res.emotion_label!,
-                            confidence: res.confidence!,
-                            all_emotions: res.all_emotions,
+                            distress_score: res.distress_score,
+                            distress_intensity: res.distress_intensity,
+                            stress_features: res.stress_features,
                             raw: res as unknown as Record<string, unknown>,
                         });
                     } else {
@@ -221,11 +227,11 @@ export default function AnalyzePage() {
                     if (res.success) {
                         setResult({
                             type: "audio",
-                            emotion_label: res.emotion_label!,
-                            confidence: res.confidence!,
-                            all_classes: res.all_classes,
-                            cry_reason: res.cry_reason,
-                            cry_description: res.cry_description,
+                            need_label: res.need_label,
+                            need_description: res.need_description,
+                            confidence: res.confidence,
+                            secondary_need: res.secondary_need,
+                            all_needs: res.all_needs,
                             raw: res as unknown as Record<string, unknown>,
                         });
                     } else {
@@ -236,8 +242,12 @@ export default function AnalyzePage() {
                     if (res.success) {
                         setResult({
                             type: "video",
-                            emotion_label: res.emotion_label!,
-                            confidence: res.confidence!,
+                            need_label: res.need_label,
+                            need_description: res.need_description,
+                            confidence: res.confidence,
+                            secondary_need: res.secondary_need,
+                            all_needs: res.all_needs,
+                            fusion_weights: res.fusion_weights,
                             raw: res as unknown as Record<string, unknown>,
                         });
                     } else {
@@ -257,12 +267,24 @@ export default function AnalyzePage() {
     // ─── Save result ─────────────────────────────────────────
     const handleSave = useCallback(async () => {
         if (!result || !token || !selectedChild) return;
+
+        // Face-only results don't have need_label, so derive one
+        const needLabel = result.need_label || (
+            result.distress_score !== undefined
+                ? (result.distress_score > 0.5 ? "pain" : "calm")
+                : "calm"
+        );
+        const confidence = result.confidence ?? result.distress_score ?? 0;
+
         try {
             await saveAnalysisResult(token, {
                 child_id: selectedChild,
-                emotion_label: result.emotion_label,
-                confidence: result.confidence,
+                need_label: needLabel,
+                confidence,
                 modality: result.type === "face" ? "face" : result.type === "audio" ? "voice" : "combined",
+                secondary_need: result.secondary_need,
+                all_needs: result.all_needs,
+                face_distress_score: result.distress_score,
                 raw_result: result.raw,
             });
             setSaved(true);
@@ -278,6 +300,21 @@ export default function AnalyzePage() {
         };
     }, [stopCamera]);
 
+    // ─── Helper: display label for results ───────────────────
+    const displayLabel = result?.need_label || (
+        result?.distress_intensity
+            ? `${result.distress_intensity} distress`
+            : undefined
+    );
+
+    const displayEmoji = result?.need_label
+        ? NEED_EMOJI[result.need_label as NeedLabel] || "🔍"
+        : result?.distress_score !== undefined
+            ? (result.distress_score > 0.6 ? "😰" : result.distress_score > 0.3 ? "😟" : "😌")
+            : "🔍";
+
+    const displayConfidence = result?.confidence ?? result?.distress_score;
+
     return (
         <div className="animate-fade-in space-y-5">
             {/* Breadcrumb */}
@@ -292,10 +329,10 @@ export default function AnalyzePage() {
             {/* Header */}
             <div>
                 <h1 className="text-2xl font-extrabold font-[family-name:var(--font-sans)]">
-                    Analyze Baby Emotion
+                    Analyze Baby Needs
                 </h1>
                 <p className="text-text-secondary text-sm mt-1">
-                    Scan your baby&apos;s face, record their sounds, or upload a file to understand their emotions
+                    Scan your baby&apos;s face, record their sounds, or upload a file to understand their needs
                 </p>
             </div>
 
@@ -486,51 +523,60 @@ export default function AnalyzePage() {
                         Analysis Result
                     </h3>
 
-                    {/* Main emotion */}
+                    {/* Main result */}
                     <div className="flex items-center gap-4 mb-6">
                         <div className="w-16 h-16 rounded-2xl bg-primary-50 flex items-center justify-center">
-                            <span className="text-4xl">
-                                {EMOTION_EMOJI[result.emotion_label as keyof typeof EMOTION_EMOJI] || "🔍"}
-                            </span>
+                            <span className="text-4xl">{displayEmoji}</span>
                         </div>
                         <div>
                             <div className="flex items-center gap-2 mb-1">
                                 <span className="px-3 py-1 rounded-full text-sm font-bold capitalize bg-primary-100 text-primary-800">
-                                    {result.emotion_label}
+                                    {displayLabel || "analyzing"}
                                 </span>
+                                {result.secondary_need && (
+                                    <span className="px-2 py-0.5 rounded-full text-xs font-medium capitalize bg-amber-50 text-amber-700 border border-amber-200">
+                                        also: {result.secondary_need}
+                                    </span>
+                                )}
                                 <span className="text-xs text-text-muted">
                                     via {result.type === "face" ? "facial expression" : result.type === "audio" ? "cry analysis" : "combined"}
                                 </span>
                             </div>
-                            {result.cry_description && (
-                                <p className="text-sm text-text-secondary">{result.cry_description}</p>
+                            {result.need_description && (
+                                <p className="text-sm text-text-secondary">{result.need_description}</p>
                             )}
                         </div>
                     </div>
 
-                    {/* Confidence bar */}
-                    <div className="mb-6">
-                        <div className="flex justify-between text-xs text-text-muted mb-1.5">
-                            <span className="font-medium">Confidence</span>
-                            <span className="font-semibold">{(result.confidence * 100).toFixed(1)}%</span>
+                    {/* Confidence / Distress bar */}
+                    {displayConfidence !== undefined && (
+                        <div className="mb-6">
+                            <div className="flex justify-between text-xs text-text-muted mb-1.5">
+                                <span className="font-medium">
+                                    {result.type === "face" ? "Distress Level" : "Confidence"}
+                                </span>
+                                <span className="font-semibold">{(displayConfidence * 100).toFixed(1)}%</span>
+                            </div>
+                            <div className="w-full h-3 bg-primary-50 rounded-full overflow-hidden">
+                                <div
+                                    className="h-full bg-gradient-to-r from-primary-400 to-primary-600 rounded-full transition-all duration-700"
+                                    style={{ width: `${displayConfidence * 100}%` }}
+                                />
+                            </div>
                         </div>
-                        <div className="w-full h-3 bg-primary-50 rounded-full overflow-hidden">
-                            <div
-                                className="h-full bg-gradient-to-r from-primary-400 to-primary-600 rounded-full transition-all duration-700"
-                                style={{ width: `${result.confidence * 100}%` }}
-                            />
-                        </div>
-                    </div>
+                    )}
 
-                    {/* All emotions breakdown */}
-                    {result.all_emotions && (
+                    {/* Face stress features */}
+                    {result.stress_features && (
                         <div className="mb-6 space-y-2">
-                            <p className="text-xs text-text-muted font-semibold">All detected emotions</p>
-                            {Object.entries(result.all_emotions)
+                            <p className="text-xs text-text-muted font-semibold">Stress Features</p>
+                            {Object.entries(result.stress_features)
                                 .sort(([, a], [, b]) => b - a)
                                 .map(([label, score]) => (
                                     <div key={label} className="flex items-center gap-2">
-                                        <span className="w-20 text-xs text-text-secondary capitalize">{label}</span>
+                                        <span className="w-28 text-xs text-text-secondary capitalize">
+                                            {label.replace(/_/g, " ")}
+                                        </span>
                                         <div className="flex-1 h-2 bg-primary-50 rounded-full overflow-hidden">
                                             <div
                                                 className="h-full bg-primary-300/60 rounded-full"
@@ -545,20 +591,21 @@ export default function AnalyzePage() {
                         </div>
                     )}
 
-                    {/* Cry classes breakdown */}
-                    {result.all_classes && (
+                    {/* All needs breakdown */}
+                    {result.all_needs && (
                         <div className="mb-6 space-y-2">
-                            <p className="text-xs text-text-muted font-semibold">Cry classification</p>
-                            {Object.entries(result.all_classes)
+                            <p className="text-xs text-text-muted font-semibold">Need Breakdown</p>
+                            {Object.entries(result.all_needs)
                                 .sort(([, a], [, b]) => b - a)
                                 .map(([label, score]) => (
                                     <div key={label} className="flex items-center gap-2">
-                                        <span className="w-20 text-xs text-text-secondary capitalize">
-                                            {label.replace(/_/g, " ")}
+                                        <span className="w-20 text-xs text-text-secondary capitalize flex items-center gap-1">
+                                            <span>{NEED_EMOJI[label as NeedLabel] || ""}</span>
+                                            {label}
                                         </span>
                                         <div className="flex-1 h-2 bg-primary-50 rounded-full overflow-hidden">
                                             <div
-                                                className="h-full bg-sky/60 rounded-full"
+                                                className="h-full bg-primary-300/60 rounded-full"
                                                 style={{ width: `${score * 100}%` }}
                                             />
                                         </div>
@@ -567,6 +614,22 @@ export default function AnalyzePage() {
                                         </span>
                                     </div>
                                 ))}
+                        </div>
+                    )}
+
+                    {/* Fusion weights (for combined results) */}
+                    {result.fusion_weights && (
+                        <div className="mb-6">
+                            <p className="text-xs text-text-muted font-semibold mb-2">Signal Weights</p>
+                            <div className="flex gap-2">
+                                {Object.entries(result.fusion_weights)
+                                    .filter(([, v]) => v > 0)
+                                    .map(([key, value]) => (
+                                        <span key={key} className="px-2.5 py-1 rounded-lg text-xs font-medium bg-primary-50 text-primary-700">
+                                            {key}: {(value * 100).toFixed(0)}%
+                                        </span>
+                                    ))}
+                            </div>
                         </div>
                     )}
 

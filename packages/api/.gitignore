@@ -1,0 +1,10 @@
+# ML model binaries (downloaded at setup)
+ml/models/*.task
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Environment
+.env
