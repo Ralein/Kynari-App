@@ -315,3 +315,196 @@ def _hour_to_period(hour: int) -> str:
 
 # Singleton instance
 baseline_engine = BaselineEngine()
+
+
+# ─── Need Baseline Engine ────────────────────────────────────
+
+NEED_LABELS = ["hungry", "diaper", "sleepy", "pain", "calm"]
+
+
+class NeedBaselineEngine:
+    """Rolling baseline calculator for per-child need patterns.
+
+    Same algorithm as BaselineEngine, but operates on:
+    - need_events table (instead of emotion_events)
+    - need_baselines table (instead of child_baselines)
+    - need_daily_summaries table (instead of daily_summaries)
+    """
+
+    async def ingest_events(self, child_id: str, events: list) -> None:
+        """After need events are stored, trigger baseline recalculation."""
+        logger.info(f"Ingesting {len(events)} need events for child {child_id}")
+        await self.recalculate_baseline(child_id)
+
+        today = date.today().isoformat()
+        await self.generate_daily_summary(child_id, today)
+
+    async def recalculate_baseline(self, child_id: str) -> dict | None:
+        """Recalculate rolling 14-day baseline for each need class."""
+        window_start = (date.today() - timedelta(days=BASELINE_WINDOW_DAYS)).isoformat()
+        events = fetch_all(
+            """
+            SELECT need_label, timestamp FROM need_events
+            WHERE child_id = %s AND timestamp >= %s
+            """,
+            (child_id, f"{window_start}T00:00:00Z"),
+        )
+
+        if not events:
+            return None
+
+        daily_counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        all_dates: set[str] = set()
+
+        for event in events:
+            need = event["need_label"]
+            event_date = str(event["timestamp"])[:10]
+            daily_counts[need][event_date] += 1
+            all_dates.add(event_date)
+
+        total_unique_days = len(all_dates)
+        calibrated = total_unique_days >= CALIBRATION_DAYS
+
+        pool = get_pool()
+        baselines = {}
+        for need in NEED_LABELS:
+            counts = daily_counts.get(need, {})
+            daily_values = [counts.get(d, 0) for d in all_dates]
+
+            if not daily_values:
+                mean, std = 0.0, 0.0
+            else:
+                mean = sum(daily_values) / len(daily_values)
+                variance = sum((x - mean) ** 2 for x in daily_values) / max(len(daily_values), 1)
+                std = variance ** 0.5
+
+            now_ts = datetime.now(timezone.utc).isoformat()
+
+            with pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO need_baselines
+                            (child_id, need_label, mean_frequency, std_deviation,
+                             calibration_complete, days_of_data, last_updated)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (child_id, need_label) DO UPDATE SET
+                            mean_frequency = EXCLUDED.mean_frequency,
+                            std_deviation = EXCLUDED.std_deviation,
+                            calibration_complete = EXCLUDED.calibration_complete,
+                            days_of_data = EXCLUDED.days_of_data,
+                            last_updated = EXCLUDED.last_updated
+                        """,
+                        (child_id, need, round(mean, 4), round(std, 4),
+                         calibrated, total_unique_days, now_ts),
+                    )
+                conn.commit()
+
+            baselines[need] = {
+                "mean_frequency": round(mean, 4),
+                "std_deviation": round(std, 4),
+                "calibration_complete": calibrated,
+                "days_of_data": total_unique_days,
+            }
+
+        return baselines
+
+    async def get_deviation(self, child_id: str, need: str, current_frequency: float) -> float | None:
+        """Returns z-score deviation from need baseline."""
+        baseline = fetch_one(
+            """
+            SELECT mean_frequency, std_deviation, calibration_complete
+            FROM need_baselines WHERE child_id = %s AND need_label = %s
+            """,
+            (child_id, need),
+        )
+        if not baseline or not baseline.get("calibration_complete"):
+            return None
+        std = baseline["std_deviation"]
+        if std == 0:
+            return 0.0
+        return round((current_frequency - baseline["mean_frequency"]) / std, 3)
+
+    async def generate_daily_summary(self, child_id: str, target_date: str) -> dict | None:
+        """Generate a need-based daily summary."""
+        events = fetch_all(
+            """
+            SELECT need_label, confidence, timestamp FROM need_events
+            WHERE child_id = %s AND timestamp >= %s AND timestamp < %s
+            """,
+            (child_id, f"{target_date}T00:00:00Z", f"{target_date}T23:59:59Z"),
+        )
+
+        if not events:
+            return None
+
+        total = len(events)
+        counts: dict[str, int] = defaultdict(int)
+        for event in events:
+            counts[event["need_label"]] += 1
+
+        distribution = {
+            need: round((counts.get(need, 0) / total) * 100, 1)
+            for need in NEED_LABELS
+        }
+
+        dominant = max(counts, key=counts.get)  # type: ignore
+        deviation = await self.get_deviation(child_id, dominant, counts[dominant])
+
+        insight = self._generate_insight(counts, total, dominant)
+
+        summary = {
+            "child_id": child_id,
+            "date": target_date,
+            "dominant_need": dominant,
+            "need_distribution": distribution,
+            "total_events": total,
+            "baseline_deviation": deviation,
+            "insight_text": insight,
+        }
+
+        pool = get_pool()
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO need_daily_summaries
+                        (child_id, date, dominant_need, need_distribution,
+                         total_events, baseline_deviation, insight_text)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (child_id, date) DO UPDATE SET
+                        dominant_need = EXCLUDED.dominant_need,
+                        need_distribution = EXCLUDED.need_distribution,
+                        total_events = EXCLUDED.total_events,
+                        baseline_deviation = EXCLUDED.baseline_deviation,
+                        insight_text = EXCLUDED.insight_text
+                    """,
+                    (child_id, target_date, dominant,
+                     json.dumps(distribution), total, deviation, insight),
+                )
+            conn.commit()
+
+        return summary
+
+    def _generate_insight(self, counts: dict[str, int], total: int, dominant: str) -> str:
+        """Generate need-focused insight text."""
+        dominant_pct = round((counts[dominant] / total) * 100)
+        need_desc = {
+            "hungry": "feeding",
+            "diaper": "diaper changes",
+            "sleepy": "nap time",
+            "pain": "discomfort or gas",
+            "calm": "calm and settled",
+        }
+        desc = need_desc.get(dominant, dominant)
+
+        if dominant == "calm":
+            return f"A great day! Baby was mostly calm ({dominant_pct}% of readings). 😊"
+        elif dominant_pct > 50:
+            return f"Baby needed {desc} most today ({dominant_pct}% of readings). Consider adjusting schedule."
+        else:
+            return f"Most frequent need today was {desc} ({dominant_pct}%). Overall a balanced day."
+
+
+# Singleton
+need_baseline_engine = NeedBaselineEngine()
