@@ -1,15 +1,14 @@
-"""Emotion events router — ingest and query emotion events."""
+"""Need events router — ingest and query need detection events."""
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from middleware.auth import get_current_user
 from models.schemas import (
-    BatchEventsRequest,
+    BatchNeedEventsRequest,
     BatchEventsResponse,
-    EmotionEventResponse,
-    HourlyGroup,
-    DailySummaryResponse,
+    NeedEventResponse,
+    NeedDailySummaryResponse,
 )
-from database import fetch_one, fetch_all, execute_returning_all, get_pool
+from database import fetch_one, fetch_all, get_pool
 from services.baseline_engine import baseline_engine
 from services.summary_generator import summary_generator
 from collections import defaultdict
@@ -30,12 +29,12 @@ def _verify_child_ownership(child_id: str, user_id: str) -> None:
 
 @router.post("/batch", response_model=BatchEventsResponse, status_code=201)
 async def batch_create_events(
-    body: BatchEventsRequest,
+    body: BatchNeedEventsRequest,
     background_tasks: BackgroundTasks,
     user: dict = Depends(get_current_user),
 ):
     """
-    Ingest a batch of emotion events from a monitoring session.
+    Ingest a batch of need events from a monitoring session.
     Validates ownership, stores events, triggers background baseline recalculation.
     """
     _verify_child_ownership(body.child_id, user["user_id"])
@@ -47,21 +46,23 @@ async def batch_create_events(
     values = []
     params = []
     for i, event in enumerate(body.events):
-        base = i * 6
-        values.append(
-            f"(%s, %s, %s, %s, %s, %s)"
-        )
+        values.append("(%s, %s, %s, %s, %s, %s, %s, %s, %s)")
         params.extend([
             body.child_id,
             body.session_id,
-            event.emotion_label,
+            event.need_label,
             event.confidence,
             event.modality,
             event.timestamp.isoformat(),
+            event.secondary_need,
+            event.face_distress_score,
+            event.audio_features,
         ])
 
     sql = f"""
-        INSERT INTO emotion_events (child_id, session_id, emotion_label, confidence, modality, timestamp)
+        INSERT INTO need_events
+            (child_id, session_id, need_label, confidence, modality,
+             timestamp, secondary_need, face_distress_score, audio_features)
         VALUES {', '.join(values)}
         RETURNING *
     """
@@ -76,7 +77,7 @@ async def batch_create_events(
     if not rows:
         raise HTTPException(status_code=500, detail="Failed to store events")
 
-    # Phase 1: Trigger baseline recalculation in background
+    # Trigger baseline recalculation in background
     background_tasks.add_task(
         baseline_engine.ingest_events, body.child_id, body.events
     )
@@ -87,20 +88,20 @@ async def batch_create_events(
     )
 
 
-@router.get("/{child_id}", response_model=list[EmotionEventResponse])
+@router.get("/{child_id}", response_model=list[NeedEventResponse])
 async def get_events_by_date(
     child_id: str,
     date: str,
     session_id: str | None = None,
     user: dict = Depends(get_current_user),
 ):
-    """Get emotion events for a child on a specific date."""
+    """Get need events for a child on a specific date."""
     _verify_child_ownership(child_id, user["user_id"])
 
     if session_id:
         rows = fetch_all(
             """
-            SELECT * FROM emotion_events
+            SELECT * FROM need_events
             WHERE child_id = %s
               AND timestamp >= %s
               AND timestamp < %s
@@ -112,7 +113,7 @@ async def get_events_by_date(
     else:
         rows = fetch_all(
             """
-            SELECT * FROM emotion_events
+            SELECT * FROM need_events
             WHERE child_id = %s
               AND timestamp >= %s
               AND timestamp < %s
@@ -124,55 +125,7 @@ async def get_events_by_date(
     return rows
 
 
-@router.get("/{child_id}/timeline", response_model=list[HourlyGroup])
-async def get_timeline(
-    child_id: str,
-    date: str,
-    user: dict = Depends(get_current_user),
-):
-    """Get events grouped by hour for the hourly chart."""
-    _verify_child_ownership(child_id, user["user_id"])
-
-    events = fetch_all(
-        """
-        SELECT * FROM emotion_events
-        WHERE child_id = %s
-          AND timestamp >= %s
-          AND timestamp < %s
-        ORDER BY timestamp
-        """,
-        (child_id, f"{date}T00:00:00Z", f"{date}T23:59:59Z"),
-    )
-
-    # Group by hour
-    hourly: dict[int, list] = defaultdict(list)
-    for event in events:
-        ts = str(event["timestamp"])
-        hour = int(ts[11:13])
-        hourly[hour].append(event)
-
-    # Build response
-    groups = []
-    for hour in sorted(hourly.keys()):
-        hour_events = hourly[hour]
-        # Find dominant emotion for this hour
-        emotion_counts: dict[str, int] = defaultdict(int)
-        for e in hour_events:
-            emotion_counts[e["emotion_label"]] += 1
-        dominant = max(emotion_counts, key=emotion_counts.get)  # type: ignore
-
-        groups.append(
-            HourlyGroup(
-                hour=hour,
-                events=hour_events,
-                dominant_emotion=dominant,
-            )
-        )
-
-    return groups
-
-
-@router.post("/{child_id}/generate-summary", response_model=DailySummaryResponse | None)
+@router.post("/{child_id}/generate-summary", response_model=NeedDailySummaryResponse | None)
 async def generate_summary(
     child_id: str,
     target_date: str | None = None,
