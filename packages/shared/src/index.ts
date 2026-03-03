@@ -139,10 +139,49 @@ export const NEED_COLORS: Record<NeedLabel, string> = {
     calm: "#34D399",
 };
 
-export const NEED_DESCRIPTIONS: Record<NeedLabel, string> = {
-    hungry: "Your baby might be hungry",
-    diaper: "Your baby might need a diaper change",
-    sleepy: "Your baby might be tired and sleepy",
-    pain: "Your baby might have belly pain or discomfort",
-    calm: "Your baby seems calm or needs burping",
+export const NEED_ADVICE: Record<NeedLabel, { title: string; icon: string; low: string; medium: string; high: string }> = {
+    hungry: {
+        title: "Hungry",
+        icon: "🍼",
+        low: "Your baby may be starting to feel hungry. Watch for rooting or hand-to-mouth signals.",
+        medium: "Your baby is likely hungry. Try offering a feed — breast or bottle. Check when they last ate.",
+        high: "Your baby is showing strong hunger cues! Feed immediately. If breastfeeding, try both sides.",
+    },
+    diaper: {
+        title: "Diaper Change",
+        icon: "👶",
+        low: "Mild discomfort detected. Quick diaper check recommended.",
+        medium: "Your baby may need a diaper change. Check for wetness or soiling.",
+        high: "Your baby is very uncomfortable — likely a soiled diaper. Change immediately and check for rash.",
+    },
+    sleepy: {
+        title: "Tired / Sleepy",
+        icon: "😴",
+        low: "Your baby may be getting drowsy. Start winding down and dimming lights.",
+        medium: "Your baby is tired. Try swaddling, rocking, or putting them down for a nap.",
+        high: "Your baby is overtired! Move to a quiet, dark room. Gentle rocking and white noise can help.",
+    },
+    pain: {
+        title: "Pain / Discomfort",
+        icon: "🤕",
+        low: "Mild fussiness detected. Could be gas — try gentle tummy massage or bicycle legs.",
+        medium: "Your baby seems to be in discomfort. Try burping, gas drops, or a warm compress on the tummy.",
+        high: "Your baby appears to be in significant pain. Check for fever, rash, or swelling. If pain persists, contact your pediatrician.",
+    },
+    calm: {
+        title: "Content / Calm",
+        icon: "😌",
+        low: "Your baby is content! Great time for tummy time or gentle play.",
+        medium: "Your baby seems relaxed. May need burping if fed recently.",
+        high: "Your baby is very calm and settled. Enjoy the moment! 💜",
+    },
 };
+
+export const DISTRESS_SCALE = [
+    { min: 0, max: 1, label: "No pain", color: "#22C55E", emoji: "😊" },
+    { min: 1, max: 3, label: "Mild", color: "#84CC16", emoji: "🙂" },
+    { min: 4, max: 6, label: "Moderate", color: "#EAB308", emoji: "😟" },
+    { min: 7, max: 9, label: "Severe", color: "#F97316", emoji: "😰" },
+    { min: 10, max: 10, label: "Worst possible", color: "#EF4444", emoji: "😭" },
+];
+
