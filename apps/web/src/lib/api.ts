@@ -142,6 +142,15 @@ export interface AnalyzeImageResult {
     distress_intensity?: string;
     stress_features?: Record<string, number>;
     faces_detected?: number;
+    // Need prediction (face-only ML)
+    need_label?: string;
+    need_description?: string;
+    confidence?: number;
+    secondary_need?: string;
+    all_needs?: Record<string, number>;
+    // Expression (FER model)
+    expression?: string;
+    expression_confidence?: number;
     error?: string;
     message?: string;
 }

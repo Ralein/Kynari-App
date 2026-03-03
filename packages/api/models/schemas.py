@@ -115,6 +115,15 @@ class FaceDistressResponse(BaseModel):
     distress_intensity: str | None = None
     stress_features: dict[str, float] | None = None
     faces_detected: int | None = None
+    # Need prediction (face-only ML)
+    need_label: str | None = None
+    need_description: str | None = None
+    confidence: float | None = None
+    secondary_need: str | None = None
+    all_needs: dict[str, float] | None = None
+    # Expression (FER model)
+    expression: str | None = None
+    expression_confidence: float | None = None
     error: str | None = None
     message: str | None = None
 

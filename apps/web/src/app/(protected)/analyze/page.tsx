@@ -12,7 +12,8 @@ import {
 import { NEED_EMOJI, NEED_COLORS, NEED_ADVICE, DISTRESS_SCALE, type NeedLabel } from "@kynari/shared";
 import {
     Camera, Mic, Upload, ChevronRight, Save, CheckCircle2,
-    AlertCircle, Stethoscope, Lightbulb, Volume2, ThumbsUp, ThumbsDown
+    AlertCircle, Stethoscope, Lightbulb, Volume2, ThumbsUp, ThumbsDown,
+    Search,
 } from "lucide-react";
 
 type Tab = "camera" | "audio" | "upload";
@@ -28,6 +29,8 @@ type AnalysisResult = {
     distress_intensity?: string;
     stress_features?: Record<string, number>;
     fusion_weights?: Record<string, number>;
+    expression?: string;
+    expression_confidence?: number;
     raw?: Record<string, unknown>;
 };
 
@@ -44,6 +47,71 @@ function getDistressLevel(score: number): number {
 
 function getDistressInfo(level: number) {
     return DISTRESS_SCALE.find(s => level >= s.min && level <= s.max) || DISTRESS_SCALE[0];
+}
+
+// ─── Analysis phase labels for the loading overlay ──────────
+const ANALYSIS_PHASES = [
+    "Detecting face landmarks…",
+    "Running neural network…",
+    "Classifying expression…",
+    "Mapping action units…",
+    "Predicting baby needs…",
+];
+
+function AnalyzingOverlay() {
+    const [phaseIndex, setPhaseIndex] = useState(0);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setPhaseIndex((prev) => (prev + 1) % ANALYSIS_PHASES.length);
+        }, 2000);
+        return () => clearInterval(interval);
+    }, []);
+
+    return (
+        <div className="card-soft p-8 sm:p-10 animate-fade-in">
+            <div className="flex flex-col items-center text-center">
+                {/* Magnifying glass scanning over baby silhouette */}
+                <div className="relative w-40 h-40 mb-6">
+                    {/* Baby face silhouette circle */}
+                    <div className="absolute inset-4 rounded-full bg-gradient-to-br from-primary-100 to-primary-50 border-2 border-primary-200/50" />
+                    {/* Inner features placeholder */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-5xl opacity-30">👶</span>
+                    </div>
+                    {/* Scanning magnifying glass */}
+                    <div className="absolute inset-0 flex items-center justify-center animate-magnify-scan">
+                        <div className="relative">
+                            <Search className="w-12 h-12 text-primary-600 drop-shadow-lg" strokeWidth={2.5} />
+                            {/* Glow effect behind the glass */}
+                            <div className="absolute inset-0 w-12 h-12 rounded-full bg-primary-400/20 blur-md -z-10" />
+                        </div>
+                    </div>
+                    {/* Scanning line effect */}
+                    <div className="absolute inset-x-4 top-1/2 h-[2px] bg-gradient-to-r from-transparent via-primary-400/60 to-transparent animate-pulse-soft" />
+                </div>
+
+                {/* Text */}
+                <h3 className="text-lg font-extrabold text-text-primary mb-1 font-[family-name:var(--font-sans)]">
+                    Analyzing…
+                </h3>
+                <p className="text-sm text-primary-500 font-semibold h-5 transition-all duration-300">
+                    {ANALYSIS_PHASES[phaseIndex]}
+                </p>
+
+                {/* Progress bar */}
+                <div className="w-full max-w-xs mt-5">
+                    <div className="h-2 rounded-full bg-primary-100 overflow-hidden">
+                        <div
+                            key="progress"
+                            className="h-full rounded-full bg-gradient-to-r from-primary-500 to-primary-400 animate-progress-fill"
+                        />
+                    </div>
+                    <p className="text-[11px] text-text-muted mt-2">This usually takes a few seconds</p>
+                </div>
+            </div>
+        </div>
+    );
 }
 
 export default function AnalyzePage() {
@@ -123,9 +191,16 @@ export default function AnalyzePage() {
                 if (res.success) {
                     setResult({
                         type: "face",
+                        need_label: res.need_label,
+                        need_description: res.need_description,
+                        confidence: res.confidence,
+                        secondary_need: res.secondary_need,
+                        all_needs: res.all_needs,
                         distress_score: res.distress_score,
                         distress_intensity: res.distress_intensity,
                         stress_features: res.stress_features,
+                        expression: res.expression,
+                        expression_confidence: res.expression_confidence,
                         raw: res as unknown as Record<string, unknown>,
                     });
                 } else {
@@ -233,9 +308,16 @@ export default function AnalyzePage() {
                     if (res.success) {
                         setResult({
                             type: "face",
+                            need_label: res.need_label,
+                            need_description: res.need_description,
+                            confidence: res.confidence,
+                            secondary_need: res.secondary_need,
+                            all_needs: res.all_needs,
                             distress_score: res.distress_score,
                             distress_intensity: res.distress_intensity,
                             stress_features: res.stress_features,
+                            expression: res.expression,
+                            expression_confidence: res.expression_confidence,
                             raw: res as unknown as Record<string, unknown>,
                         });
                     } else {
@@ -408,7 +490,7 @@ export default function AnalyzePage() {
                             ) : (
                                 <>
                                     <button onClick={captureAndAnalyze} disabled={isAnalyzing} className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed">
-                                        {isAnalyzing ? "Analyzing..." : "Capture & Analyze"}
+                                        Capture & Analyze
                                     </button>
                                     <button onClick={stopCamera} className="btn-secondary">Stop Camera</button>
                                 </>
@@ -432,7 +514,7 @@ export default function AnalyzePage() {
                         <div className="flex justify-center">
                             {!isRecording ? (
                                 <button onClick={startRecording} disabled={isAnalyzing} className="btn-primary disabled:opacity-50">
-                                    <Mic className="w-4 h-4" /> {isAnalyzing ? "Analyzing..." : "Start Recording"}
+                                    <Mic className="w-4 h-4" /> Start Recording
                                 </button>
                             ) : (
                                 <button onClick={stopRecording} className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-red-500 text-white font-bold text-sm hover:bg-red-600 transition-colors">
@@ -454,13 +536,16 @@ export default function AnalyzePage() {
                             onClick={() => fileInputRef.current?.click()}
                         >
                             <Upload className="w-10 h-10 text-primary-300 mx-auto mb-3" />
-                            <p className="text-text-secondary text-sm font-medium">{isAnalyzing ? "Analyzing..." : "Drag & drop or click to upload"}</p>
+                            <p className="text-text-secondary text-sm font-medium">Drag & drop or click to upload</p>
                             <p className="text-text-muted text-xs mt-1">Images (JPG, PNG) · Audio (WAV, MP3) · Video (MP4, WebM)</p>
                         </div>
                         <input ref={fileInputRef} type="file" accept="image/*,audio/*,video/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) handleFile(file); }} />
                     </div>
                 )}
             </div>
+
+            {/* Analyzing Overlay */}
+            {isAnalyzing && <AnalyzingOverlay />}
 
             {/* Error Display */}
             {error && (
@@ -528,11 +613,16 @@ export default function AnalyzePage() {
                         </div>
                     </div>
 
-                    {/* ── 2. Need Probabilities (ChatterBaby bars) ───── */}
+                    {/* ── 2. Need Prediction Bars (unified — adapts heading per modality) ── */}
                     {result.all_needs && (
                         <div className="card-soft p-6 sm:p-8">
-                            <p className="text-sm font-bold text-text-primary mb-4 font-[family-name:var(--font-sans)]">
-                                Cry Analysis
+                            <p className="text-sm font-bold text-text-primary mb-1 font-[family-name:var(--font-sans)]">
+                                {result.type === "face" ? "Face-Based Need Prediction" : "Cry Analysis"}
+                            </p>
+                            <p className="text-xs text-text-muted mb-4">
+                                {result.type === "face"
+                                    ? "Predicted using facial expression AI — for best accuracy, also record audio"
+                                    : "Predicted from audio cry patterns using AI"}
                             </p>
                             <div className="space-y-3">
                                 {Object.entries(result.all_needs)
@@ -564,30 +654,49 @@ export default function AnalyzePage() {
                         </div>
                     )}
 
-                    {/* ── 2b. Face stress features (for face-only) ──── */}
-                    {result.stress_features && !result.all_needs && (
+                    {/* ── 2b. Expression tag (FER model) ─────────── */}
+                    {result.expression && (
+                        <div className="card-soft p-5 flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center shrink-0">
+                                <span className="text-xl">
+                                    {result.expression === "happy" ? "😊" : result.expression === "sad" ? "😢" : result.expression === "angry" ? "😠" : result.expression === "fear" ? "😰" : result.expression === "disgust" ? "🤢" : result.expression === "surprise" ? "😮" : "😐"}
+                                </span>
+                            </div>
+                            <div>
+                                <p className="text-sm font-bold text-text-primary capitalize font-[family-name:var(--font-sans)]">
+                                    Expression: {result.expression}
+                                </p>
+                                <p className="text-xs text-text-muted">
+                                    Detected by AI facial expression model{result.expression_confidence ? ` (${Math.round(result.expression_confidence * 100)}% confidence)` : ""}
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── 2d. Top blendshape activations ───────────── */}
+                    {result.type === "face" && result.stress_features && Object.keys(result.stress_features).length > 0 && (
                         <div className="card-soft p-6 sm:p-8">
-                            <p className="text-sm font-bold text-text-primary mb-4 font-[family-name:var(--font-sans)]">
-                                Facial Stress Indicators
+                            <p className="text-sm font-bold text-text-primary mb-1 font-[family-name:var(--font-sans)]">
+                                Active Facial Action Units
                             </p>
-                            <div className="space-y-3">
+                            <p className="text-xs text-text-muted mb-4">ML-detected muscle activations (from neural network)</p>
+                            <div className="space-y-2.5">
                                 {Object.entries(result.stress_features)
                                     .sort(([, a], [, b]) => b - a)
                                     .map(([label, score]) => {
                                         const pct = Math.round(score * 100);
                                         return (
                                             <div key={label} className="flex items-center gap-3">
-                                                <span className="w-32 text-sm font-semibold text-text-primary capitalize">
-                                                    {label.replace(/_/g, " ")}
+                                                <span className="w-40 text-xs font-semibold text-text-secondary">
+                                                    {label.replace(/([A-Z])/g, " $1").replace(/^./, s => s.toUpperCase())}
                                                 </span>
-                                                <div className="flex-1 h-7 bg-gray-100 rounded-lg overflow-hidden">
+                                                <div className="flex-1 h-5 bg-gray-100 rounded-md overflow-hidden">
                                                     <div
-                                                        className="h-full rounded-lg flex items-center transition-all duration-700"
-                                                        style={{ width: `${Math.max(pct, 4)}%`, backgroundColor: pct > 60 ? "#F97316" : pct > 30 ? "#EAB308" : "#22C55E" }}
-                                                    >
-                                                        <span className="text-white text-xs font-bold ml-2 drop-shadow-sm">{pct}%</span>
-                                                    </div>
+                                                        className="h-full rounded-md transition-all duration-700"
+                                                        style={{ width: `${Math.max(pct, 3)}%`, backgroundColor: pct > 50 ? "#8B5CF6" : pct > 25 ? "#A78BFA" : "#C4B5FD" }}
+                                                    />
                                                 </div>
+                                                <span className="text-xs font-bold text-text-muted w-10 text-right">{pct}%</span>
                                             </div>
                                         );
                                     })}
@@ -627,9 +736,9 @@ export default function AnalyzePage() {
                                 <Volume2 className="w-5 h-5 text-blue-600" />
                             </div>
                             <div className="flex-1">
-                                <p className="text-sm font-bold text-blue-900 mb-0.5">Want more accurate results?</p>
+                                <p className="text-sm font-bold text-blue-900 mb-0.5">Boost accuracy with audio</p>
                                 <p className="text-xs text-blue-700">
-                                    Record your baby&apos;s voice for cry analysis — it gives a much more accurate need prediction.
+                                    Combine face analysis with cry recording for the most accurate need prediction.
                                 </p>
                             </div>
                             <button
