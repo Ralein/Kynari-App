@@ -106,7 +106,8 @@ cp .env.example .env
 docker compose up -d
 
 # 4. Or start the API directly
-cd packages/api && uv run --python 3.12 uvicorn main:app --reload
+cd packages/api 
+uv run --python 3.12 uvicorn main:app --reload
 
 # 5. Start the web app
 pnpm dev --filter web

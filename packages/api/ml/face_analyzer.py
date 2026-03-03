@@ -1,7 +1,7 @@
 """Face distress analyzer — detects baby face and computes a stress/distress score.
 
 Pipeline:
-1. Face detection via MediaPipe Face Mesh
+1. Face detection via MediaPipe FaceLandmarker (Tasks API)
 2. Extract facial landmarks
 3. Compute stress features: mouth_openness, eye_squint, brow_tension
 4. Output a single distress_score (0.0 = calm, 1.0 = maximum distress)
@@ -11,8 +11,10 @@ It provides supplementary data to the multimodal fusion module.
 """
 
 import io
+import os
 import base64
 import logging
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -21,29 +23,50 @@ from PIL import Image
 logger = logging.getLogger(__name__)
 
 # Lazy-loaded singleton
-_face_mesh = None
+_face_landmarker = None
+
+# Path to the downloaded .task model file
+_MODEL_DIR = Path(__file__).parent / "models"
+_MODEL_PATH = _MODEL_DIR / "face_landmarker.task"
 
 
-def _load_face_mesh():
-    """Lazy-load MediaPipe Face Mesh."""
-    global _face_mesh
-    if _face_mesh is None:
-        try:
-            import mediapipe as mp
-            _face_mesh = mp.solutions.face_mesh.FaceMesh(
-                static_image_mode=True,
-                max_num_faces=1,
-                refine_landmarks=True,
-                min_detection_confidence=0.5,
+def _load_face_landmarker():
+    """Lazy-load MediaPipe FaceLandmarker (new Tasks API)."""
+    global _face_landmarker
+    if _face_landmarker is not None:
+        return _face_landmarker
+
+    try:
+        import mediapipe as mp
+
+        if not _MODEL_PATH.exists():
+            raise FileNotFoundError(
+                f"Face landmarker model not found at {_MODEL_PATH}. "
+                "Download from: https://storage.googleapis.com/mediapipe-models/"
+                "face_landmarker/face_landmarker/float16/latest/face_landmarker.task"
             )
-            logger.info("MediaPipe Face Mesh loaded")
-        except Exception as e:
-            logger.error(f"Failed to load MediaPipe Face Mesh: {e}")
-            raise RuntimeError("Face mesh unavailable") from e
-    return _face_mesh
+
+        base_options = mp.tasks.BaseOptions(
+            model_asset_path=str(_MODEL_PATH)
+        )
+        options = mp.tasks.vision.FaceLandmarkerOptions(
+            base_options=base_options,
+            running_mode=mp.tasks.vision.RunningMode.IMAGE,
+            num_faces=1,
+            min_face_detection_confidence=0.5,
+            min_face_presence_confidence=0.5,
+            output_face_blendshapes=False,
+            output_facial_transformation_matrixes=False,
+        )
+        _face_landmarker = mp.tasks.vision.FaceLandmarker.create_from_options(options)
+        logger.info("MediaPipe FaceLandmarker loaded (Tasks API)")
+    except Exception as e:
+        logger.error(f"Failed to load MediaPipe FaceLandmarker: {e}")
+        raise RuntimeError("Face landmarker unavailable") from e
+    return _face_landmarker
 
 
-# ─── Landmark Indices (MediaPipe 468-point mesh) ──────────────
+# ─── Landmark Indices (MediaPipe 478-point mesh) ──────────────
 
 # Mouth landmarks
 UPPER_LIP_TOP = 13
@@ -132,21 +155,26 @@ def analyze_face(image: Image.Image) -> dict[str, Any]:
     Returns distress_score (0.0–1.0) and individual stress features.
     Does NOT predict needs — this is a secondary signal for the fusion module.
     """
-    face_mesh = _load_face_mesh()
+    import mediapipe as mp
 
-    # Convert PIL → numpy array for MediaPipe
+    landmarker = _load_face_landmarker()
+
+    # Convert PIL → numpy array, then to MediaPipe Image
     img_array = np.array(image)
-    results = face_mesh.process(img_array)
+    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=img_array)
 
-    if not results.multi_face_landmarks:
+    # Run detection
+    result = landmarker.detect(mp_image)
+
+    if not result.face_landmarks:
         return {
             "success": False,
             "error": "no_face_detected",
             "message": "No face detected in the image. Please try again with a clearer photo of your baby's face.",
         }
 
-    # Use first (largest/most confident) face
-    landmarks = results.multi_face_landmarks[0].landmark
+    # Use first face's landmarks (list of NormalizedLandmark objects)
+    landmarks = result.face_landmarks[0]
 
     # Compute stress features
     mouth_openness = _compute_mouth_openness(landmarks)
@@ -184,5 +212,5 @@ def analyze_face(image: Image.Image) -> dict[str, Any]:
             "eye_squint": round(eye_squint, 4),
             "brow_tension": round(brow_tension, 4),
         },
-        "faces_detected": len(results.multi_face_landmarks),
+        "faces_detected": len(result.face_landmarks),
     }

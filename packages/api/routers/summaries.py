@@ -2,14 +2,14 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from middleware.auth import get_current_user
-from models.schemas import DailySummaryResponse, BaselineStatusResponse
+from models.schemas import NeedDailySummaryResponse, BaselineStatusResponse
 from database import fetch_one, fetch_all
 from services.summary_generator import summary_generator
 from datetime import date, timedelta
 
 router = APIRouter(prefix="/summaries", tags=["summaries"])
 
-EMOTION_LABELS = ["happy", "sad", "angry", "fearful", "neutral", "frustrated"]
+NEED_LABELS = ["hungry", "diaper", "sleepy", "pain", "calm"]
 
 
 def _verify_child_ownership(child_id: str, user_id: str) -> None:
@@ -21,20 +21,20 @@ def _verify_child_ownership(child_id: str, user_id: str) -> None:
         raise HTTPException(status_code=404, detail="Child not found or access denied")
 
 
-@router.get("/{child_id}/today", response_model=DailySummaryResponse | None)
+@router.get("/{child_id}/today", response_model=NeedDailySummaryResponse | None)
 async def get_today_summary(child_id: str, user: dict = Depends(get_current_user)):
     """Get today's daily summary for a child."""
     _verify_child_ownership(child_id, user["user_id"])
 
     today = date.today().isoformat()
     row = fetch_one(
-        "SELECT * FROM daily_summaries WHERE child_id = %s AND date = %s",
+        "SELECT * FROM need_daily_summaries WHERE child_id = %s AND date = %s",
         (child_id, today),
     )
     return row
 
 
-@router.get("/{child_id}/week", response_model=list[DailySummaryResponse])
+@router.get("/{child_id}/week", response_model=list[NeedDailySummaryResponse])
 async def get_week_summaries(child_id: str, user: dict = Depends(get_current_user)):
     """Get the last 7 days of daily summaries."""
     _verify_child_ownership(child_id, user["user_id"])
@@ -42,7 +42,7 @@ async def get_week_summaries(child_id: str, user: dict = Depends(get_current_use
     week_ago = (date.today() - timedelta(days=7)).isoformat()
     rows = fetch_all(
         """
-        SELECT * FROM daily_summaries
+        SELECT * FROM need_daily_summaries
         WHERE child_id = %s AND date >= %s
         ORDER BY date
         """,
@@ -79,8 +79,8 @@ async def get_patterns(
     user: dict = Depends(get_current_user),
 ):
     """
-    Get emotion frequency patterns over time.
-    Returns per-emotion daily frequency for the last N days.
+    Get need frequency patterns over time.
+    Returns per-need daily frequency for the last N days.
     """
     _verify_child_ownership(child_id, user["user_id"])
 
@@ -88,8 +88,8 @@ async def get_patterns(
 
     summaries = fetch_all(
         """
-        SELECT date, dominant_emotion, emotion_distribution, total_events
-        FROM daily_summaries
+        SELECT date, dominant_need, need_distribution, total_events
+        FROM need_daily_summaries
         WHERE child_id = %s AND date >= %s
         ORDER BY date
         """,
@@ -102,25 +102,25 @@ async def get_patterns(
             "days": days,
             "days_with_data": 0,
             "patterns": [],
-            "emotion_trends": {},
+            "need_trends": {},
             "message": "No data available for this period. Start recording to build patterns.",
         }
 
     # Build per-emotion time series
-    emotion_trends: dict[str, list[dict]] = {e: [] for e in EMOTION_LABELS}
+    need_trends: dict[str, list[dict]] = {n: [] for n in NEED_LABELS}
 
     for summary in summaries:
-        dist = summary.get("emotion_distribution", {})
-        for emotion in EMOTION_LABELS:
-            emotion_trends[emotion].append({
+        dist = summary.get("need_distribution", {})
+        for need in NEED_LABELS:
+            need_trends[need].append({
                 "date": summary["date"],
-                "percentage": dist.get(emotion, 0),
+                "percentage": dist.get(need, 0),
             })
 
     # Detect overall dominant pattern
     dominant_counts: dict[str, int] = {}
     for summary in summaries:
-        dom = summary["dominant_emotion"]
+        dom = summary["dominant_need"]
         dominant_counts[dom] = dominant_counts.get(dom, 0) + 1
 
     return {
@@ -128,7 +128,7 @@ async def get_patterns(
         "days": days,
         "days_with_data": len(summaries),
         "dominant_distribution": dominant_counts,
-        "emotion_trends": emotion_trends,
+        "need_trends": need_trends,
         "patterns": summaries,
     }
 
