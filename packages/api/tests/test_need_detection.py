@@ -74,34 +74,81 @@ class TestAudioAnalyzer:
 
 
 class TestFaceAnalyzer:
-    """Tests for ml/face_analyzer.py distress scoring."""
+    """Tests for ml/face_analyzer.py ML-based distress + need detection."""
 
-    def test_distress_score_range(self):
-        """Distress score components should all normalize to 0–1."""
-        from ml.face_analyzer import (
-            _compute_mouth_openness,
-            _compute_eye_squint,
-            _compute_brow_tension,
-        )
+    def test_blendshape_extraction(self):
+        """_extract_blendshapes should convert raw MediaPipe blendshapes to dict."""
+        from ml.face_analyzer import _extract_blendshapes
 
-        # These functions expect landmark objects with x, y, z attributes
-        class FakeLandmark:
-            def __init__(self, x, y, z):
-                self.x = x
-                self.y = y
-                self.z = z
+        class FakeBS:
+            def __init__(self, name, score):
+                self.category_name = name
+                self.score = score
 
-        # Create a basic set of landmarks (468 points, only some matter)
-        landmarks = [FakeLandmark(0.5, 0.5, 0.0) for _ in range(500)]
+        raw = [
+            FakeBS("_neutral", 0.9),
+            FakeBS("browDownLeft", 0.7),
+            FakeBS("jawOpen", 0.5),
+            FakeBS("mouthSmileLeft", 0.1),
+        ]
+        result = _extract_blendshapes(raw)
+        # Should skip _neutral
+        assert "_neutral" not in result
+        assert result["browDownLeft"] == 0.7
+        assert result["jawOpen"] == 0.5
+        assert result["mouthSmileLeft"] == 0.1
 
-        mouth = _compute_mouth_openness(landmarks)
-        assert 0.0 <= mouth <= 1.0
+    def test_distress_from_blendshapes_range(self):
+        """Distress score from blendshapes should be 0–1."""
+        from ml.face_analyzer import _compute_distress_from_blendshapes
 
-        eyes = _compute_eye_squint(landmarks)
-        assert 0.0 <= eyes <= 1.0
+        # All zeros → low distress
+        calm = {name: 0.0 for name in [
+            "browDownLeft", "eyeSquintLeft", "jawOpen",
+            "mouthFrownLeft", "mouthSmileLeft",
+        ]}
+        score_calm = _compute_distress_from_blendshapes(calm)
+        assert 0.0 <= score_calm <= 1.0
 
-        brow = _compute_brow_tension(landmarks)
-        assert 0.0 <= brow <= 1.0
+        # High distress signals
+        distressed = {
+            "browDownLeft": 0.9, "browDownRight": 0.9,
+            "eyeSquintLeft": 0.8, "eyeSquintRight": 0.8,
+            "jawOpen": 0.7, "mouthStretchLeft": 0.9, "mouthStretchRight": 0.9,
+            "mouthFrownLeft": 0.8, "mouthFrownRight": 0.8,
+            "noseSneerLeft": 0.6, "noseSneerRight": 0.6,
+        }
+        score_distress = _compute_distress_from_blendshapes(distressed)
+        assert 0.0 <= score_distress <= 1.0
+        assert score_distress > score_calm, "Distressed face should score higher"
+
+    def test_need_prediction_returns_valid_labels(self):
+        """Need prediction should return valid need labels and sum to ~1."""
+        from ml.face_analyzer import _predict_need_from_face, NEED_LABELS
+
+        blendshapes = {
+            "eyeSquintLeft": 0.8, "eyeSquintRight": 0.8,
+            "browDownLeft": 0.7, "browDownRight": 0.7,
+            "mouthStretchLeft": 0.9, "mouthStretchRight": 0.9,
+            "noseSneerLeft": 0.6, "noseSneerRight": 0.6,
+            "jawOpen": 0.7,
+        }
+        result = _predict_need_from_face(blendshapes, 0.8, None)
+
+        assert result["need_label"] in NEED_LABELS
+        assert 0.0 <= result["confidence"] <= 1.0
+        assert set(result["all_needs"].keys()) == set(NEED_LABELS)
+        total = sum(result["all_needs"].values())
+        assert 0.95 <= total <= 1.05, f"Need scores should sum to ~1, got {total}"
+
+    def test_expression_distress_mapping(self):
+        """Expression labels should map to valid distress values."""
+        from ml.face_analyzer import EXPRESSION_DISTRESS
+
+        for label, score in EXPRESSION_DISTRESS.items():
+            assert 0.0 <= score <= 1.0, f"{label} distress out of range: {score}"
+        assert EXPRESSION_DISTRESS["happy"] < EXPRESSION_DISTRESS["sad"]
+        assert EXPRESSION_DISTRESS["neutral"] < EXPRESSION_DISTRESS["angry"]
 
     def test_decode_image_from_bytes(self):
         """decode_image should handle raw bytes."""
@@ -109,7 +156,6 @@ class TestFaceAnalyzer:
         from PIL import Image
         import io
 
-        # Create a small test image
         img = Image.new("RGB", (100, 100), color="red")
         buf = io.BytesIO()
         img.save(buf, format="PNG")
