@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createChild } from "@/lib/api";
 import { useToken } from "@/lib/hooks";
+import { Baby, ArrowRight, ArrowLeft, Loader2 } from "lucide-react";
 
 export default function AddChildPage() {
     const router = useRouter();
@@ -44,21 +45,21 @@ export default function AddChildPage() {
                         <div
                             key={step}
                             className={`h-2.5 rounded-full transition-all ${step === 2
-                                    ? "bg-teal-500 w-8"
-                                    : step < 2
-                                        ? "bg-teal-300 w-2.5"
-                                        : "bg-stone-200 w-2.5"
+                                ? "bg-primary-500 w-8"
+                                : step < 2
+                                    ? "bg-primary-300 w-2.5"
+                                    : "bg-primary-200 w-2.5"
                                 }`}
                         />
                     ))}
                 </div>
 
                 <form onSubmit={handleSubmit} className="text-center">
-                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-teal-100 to-teal-200 flex items-center justify-center mx-auto mb-8">
-                        <span className="text-4xl">👶</span>
+                    <div className="w-20 h-20 rounded-full bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center mx-auto mb-8">
+                        <Baby className="w-10 h-10 text-primary-500" />
                     </div>
 
-                    <h1 className="text-3xl font-bold tracking-tight mb-3 font-[family-name:var(--font-sans)]">
+                    <h1 className="text-3xl font-extrabold tracking-tight mb-3 font-[family-name:var(--font-sans)]">
                         Add your child
                     </h1>
                     <p className="text-text-secondary text-sm leading-relaxed max-w-sm mx-auto mb-10">
@@ -71,7 +72,7 @@ export default function AddChildPage() {
                         <div>
                             <label
                                 htmlFor="child-name"
-                                className="block text-sm font-medium text-text-primary mb-1.5"
+                                className="block text-sm font-semibold text-text-primary mb-1.5"
                             >
                                 Child&apos;s name
                             </label>
@@ -81,7 +82,7 @@ export default function AddChildPage() {
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
                                 placeholder="e.g. Emma"
-                                className="w-full px-4 py-3 rounded-xl border border-stone-200 bg-white text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 transition-all"
+                                className="w-full px-4 py-3 rounded-xl border border-primary-200 bg-white text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 transition-all"
                                 autoFocus
                             />
                         </div>
@@ -89,7 +90,7 @@ export default function AddChildPage() {
                         <div>
                             <label
                                 htmlFor="child-dob"
-                                className="block text-sm font-medium text-text-primary mb-1.5"
+                                className="block text-sm font-semibold text-text-primary mb-1.5"
                             >
                                 Date of birth
                             </label>
@@ -99,7 +100,7 @@ export default function AddChildPage() {
                                 value={dob}
                                 onChange={(e) => setDob(e.target.value)}
                                 max={new Date().toISOString().split("T")[0]}
-                                className="w-full px-4 py-3 rounded-xl border border-stone-200 bg-white text-text-primary focus:outline-none focus:ring-2 focus:ring-teal-500/30 focus:border-teal-400 transition-all"
+                                className="w-full px-4 py-3 rounded-xl border border-primary-200 bg-white text-text-primary focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 transition-all"
                             />
                         </div>
                     </div>
@@ -116,23 +117,27 @@ export default function AddChildPage() {
                         <button
                             type="submit"
                             disabled={!canSubmit}
-                            className="inline-flex px-8 py-3.5 rounded-full bg-gradient-to-r from-teal-600 to-teal-500 text-white font-semibold shadow-xl shadow-teal-500/25 hover:shadow-teal-500/40 transition-all duration-300 hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed"
+                            className="btn-primary text-base px-8 py-3.5 disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed"
                         >
                             {loading ? (
                                 <span className="flex items-center gap-2">
-                                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    <Loader2 className="w-4 h-4 animate-spin" />
                                     Adding…
                                 </span>
                             ) : (
-                                "Continue →"
+                                <>
+                                    Continue
+                                    <ArrowRight className="w-4 h-4" />
+                                </>
                             )}
                         </button>
 
                         <Link
                             href="/onboarding"
-                            className="text-sm text-text-muted hover:text-text-secondary transition-colors"
+                            className="text-sm text-text-muted hover:text-text-secondary transition-colors flex items-center gap-1"
                         >
-                            ← Back
+                            <ArrowLeft className="w-3.5 h-3.5" />
+                            Back
                         </Link>
                     </div>
                 </form>

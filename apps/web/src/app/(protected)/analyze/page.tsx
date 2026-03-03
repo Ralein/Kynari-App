@@ -8,10 +8,9 @@ import {
     analyzeAudio,
     analyzeVideo,
     saveAnalysisResult,
-    type AnalyzeImageResult,
-    type AnalyzeAudioResult,
 } from "@/lib/api";
 import { EMOTION_EMOJI } from "@kynari/shared";
+import { Camera, Mic, Upload, ChevronRight, Save, CheckCircle2, AlertCircle } from "lucide-react";
 
 type Tab = "camera" | "audio" | "upload";
 
@@ -36,17 +35,16 @@ export default function AnalyzePage() {
     const [selectedChild, setSelectedChild] = useState<string>("");
     const [saved, setSaved] = useState(false);
 
-    // Auto-select first child
     useEffect(() => {
         if (children?.length && !selectedChild) {
             setSelectedChild(children[0].id);
         }
     }, [children, selectedChild]);
 
-    const tabs: { key: Tab; label: string; icon: string }[] = [
-        { key: "camera", label: "Scan Face", icon: "📸" },
-        { key: "audio", label: "Record Audio", icon: "🎙️" },
-        { key: "upload", label: "Upload File", icon: "📁" },
+    const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
+        { key: "camera", label: "Scan Face", icon: <Camera className="w-4 h-4" /> },
+        { key: "audio", label: "Record Audio", icon: <Mic className="w-4 h-4" /> },
+        { key: "upload", label: "Upload File", icon: <Upload className="w-4 h-4" /> },
     ];
 
     // ─── Camera capture ──────────────────────────────────────
@@ -174,7 +172,6 @@ export default function AnalyzePage() {
             setRecordingTime(0);
             timerRef.current = setInterval(() => setRecordingTime((t) => t + 1), 1000);
 
-            // Auto-stop after 10 seconds
             setTimeout(() => {
                 if (mediaRecorder.state === "recording") {
                     mediaRecorder.stop();
@@ -274,7 +271,6 @@ export default function AnalyzePage() {
         }
     }, [result, token, selectedChild]);
 
-    // Cleanup on unmount
     useEffect(() => {
         return () => {
             stopCamera();
@@ -283,19 +279,19 @@ export default function AnalyzePage() {
     }, [stopCamera]);
 
     return (
-        <div className="animate-fade-in space-y-6">
+        <div className="animate-fade-in space-y-5">
             {/* Breadcrumb */}
-            <div className="flex items-center gap-2 text-sm text-text-muted">
-                <Link href="/dashboard" className="hover:text-teal-600 transition-colors">
+            <div className="flex items-center gap-1.5 text-sm text-text-muted">
+                <Link href="/dashboard" className="hover:text-primary-600 transition-colors">
                     Dashboard
                 </Link>
-                <span>/</span>
-                <span className="text-text-primary font-medium">Analyze</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+                <span className="text-text-primary font-semibold">Analyze</span>
             </div>
 
             {/* Header */}
             <div>
-                <h1 className="text-2xl font-bold font-[family-name:var(--font-sans)]">
+                <h1 className="text-2xl font-extrabold font-[family-name:var(--font-sans)]">
                     Analyze Baby Emotion
                 </h1>
                 <p className="text-text-secondary text-sm mt-1">
@@ -306,12 +302,12 @@ export default function AnalyzePage() {
             {/* Child selector */}
             {children && children.length > 1 && (
                 <div className="flex items-center gap-3">
-                    <label className="text-sm text-text-secondary" htmlFor="child-select">Analyzing for:</label>
+                    <label className="text-sm text-text-secondary font-medium" htmlFor="child-select">Analyzing for:</label>
                     <select
                         id="child-select"
                         value={selectedChild}
                         onChange={(e) => setSelectedChild(e.target.value)}
-                        className="px-3 py-1.5 rounded-lg border border-stone-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+                        className="px-3 py-1.5 rounded-xl border border-primary-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400 transition-all"
                     >
                         {children.map((c) => (
                             <option key={c.id} value={c.id}>{c.name}</option>
@@ -321,7 +317,7 @@ export default function AnalyzePage() {
             )}
 
             {/* Tab bar */}
-            <div className="flex gap-1 bg-stone-100 rounded-xl p-1">
+            <div className="flex gap-1 bg-primary-50 rounded-2xl p-1.5">
                 {tabs.map((tab) => (
                     <button
                         key={tab.key}
@@ -331,23 +327,23 @@ export default function AnalyzePage() {
                             setError(null);
                             setSaved(false);
                         }}
-                        className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-medium transition-all ${activeTab === tab.key
-                                ? "bg-white shadow-sm text-teal-700"
-                                : "text-text-muted hover:text-text-secondary"
+                        className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${activeTab === tab.key
+                            ? "bg-white shadow-sm text-primary-700 shadow-primary-500/5"
+                            : "text-text-muted hover:text-text-secondary"
                             }`}
                     >
-                        <span>{tab.icon}</span>
+                        {tab.icon}
                         <span className="hidden sm:inline">{tab.label}</span>
                     </button>
                 ))}
             </div>
 
             {/* Tab content */}
-            <div className="glass rounded-2xl p-8">
+            <div className="card-soft p-6 sm:p-8">
                 {/* Camera Tab */}
                 {activeTab === "camera" && (
                     <div className="space-y-4">
-                        <div className="relative bg-stone-900 rounded-xl overflow-hidden aspect-video max-w-xl mx-auto">
+                        <div className="relative bg-gray-900 rounded-2xl overflow-hidden aspect-video max-w-xl mx-auto">
                             <video
                                 ref={videoRef}
                                 autoPlay
@@ -358,17 +354,15 @@ export default function AnalyzePage() {
                             <canvas ref={canvasRef} className="hidden" />
                             {!cameraActive && (
                                 <div className="absolute inset-0 flex flex-col items-center justify-center text-white/60">
-                                    <span className="text-5xl mb-3">📷</span>
+                                    <Camera className="w-12 h-12 mb-3 opacity-50" />
                                     <p className="text-sm">Camera preview will appear here</p>
                                 </div>
                             )}
                         </div>
                         <div className="flex justify-center gap-3">
                             {!cameraActive ? (
-                                <button
-                                    onClick={startCamera}
-                                    className="px-6 py-3 bg-teal-600 text-white rounded-xl hover:bg-teal-700 transition-colors font-medium"
-                                >
+                                <button onClick={startCamera} className="btn-primary">
+                                    <Camera className="w-4 h-4" />
                                     Start Camera
                                 </button>
                             ) : (
@@ -376,13 +370,13 @@ export default function AnalyzePage() {
                                     <button
                                         onClick={captureAndAnalyze}
                                         disabled={isAnalyzing}
-                                        className="px-6 py-3 bg-teal-600 text-white rounded-xl hover:bg-teal-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
-                                        {isAnalyzing ? "Analyzing..." : "📸 Capture & Analyze"}
+                                        {isAnalyzing ? "Analyzing..." : "Capture & Analyze"}
                                     </button>
                                     <button
                                         onClick={stopCamera}
-                                        className="px-6 py-3 bg-stone-200 text-stone-700 rounded-xl hover:bg-stone-300 transition-colors font-medium"
+                                        className="btn-secondary"
                                     >
                                         Stop Camera
                                     </button>
@@ -395,17 +389,17 @@ export default function AnalyzePage() {
                 {/* Audio Tab */}
                 {activeTab === "audio" && (
                     <div className="space-y-4">
-                        <div className="bg-stone-900 rounded-xl p-8 max-w-xl mx-auto flex flex-col items-center">
+                        <div className="bg-gray-900 rounded-2xl p-8 max-w-xl mx-auto flex flex-col items-center">
                             <div
                                 className={`w-24 h-24 rounded-full flex items-center justify-center mb-4 transition-all ${isRecording
-                                        ? "bg-red-500/20 animate-pulse"
-                                        : "bg-white/10"
+                                    ? "bg-red-500/20 animate-pulse"
+                                    : "bg-white/10"
                                     }`}
                             >
-                                <span className="text-4xl">{isRecording ? "🔴" : "🎙️"}</span>
+                                <Mic className={`w-10 h-10 ${isRecording ? "text-red-400" : "text-white/50"}`} />
                             </div>
                             {isRecording && (
-                                <p className="text-white/80 text-sm mb-2">
+                                <p className="text-white/80 text-sm mb-2 font-medium">
                                     Recording... {recordingTime}s / 10s
                                 </p>
                             )}
@@ -420,16 +414,17 @@ export default function AnalyzePage() {
                                 <button
                                     onClick={startRecording}
                                     disabled={isAnalyzing}
-                                    className="px-6 py-3 bg-teal-600 text-white rounded-xl hover:bg-teal-700 transition-colors font-medium disabled:opacity-50"
+                                    className="btn-primary disabled:opacity-50"
                                 >
-                                    {isAnalyzing ? "Analyzing..." : "🎙️ Start Recording"}
+                                    <Mic className="w-4 h-4" />
+                                    {isAnalyzing ? "Analyzing..." : "Start Recording"}
                                 </button>
                             ) : (
                                 <button
                                     onClick={stopRecording}
-                                    className="px-6 py-3 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors font-medium"
+                                    className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-red-500 text-white font-bold text-sm hover:bg-red-600 transition-colors"
                                 >
-                                    ⏹ Stop Recording
+                                    Stop Recording
                                 </button>
                             )}
                         </div>
@@ -440,9 +435,9 @@ export default function AnalyzePage() {
                 {activeTab === "upload" && (
                     <div className="space-y-4">
                         <div
-                            className={`border-2 border-dashed rounded-xl p-12 text-center transition-colors max-w-xl mx-auto cursor-pointer ${dragOver
-                                    ? "border-teal-500 bg-teal-50/50"
-                                    : "border-stone-300 hover:border-teal-400"
+                            className={`border-2 border-dashed rounded-2xl p-12 text-center transition-colors max-w-xl mx-auto cursor-pointer ${dragOver
+                                ? "border-primary-500 bg-primary-50/50"
+                                : "border-primary-200 hover:border-primary-400"
                                 }`}
                             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                             onDragLeave={() => setDragOver(false)}
@@ -454,8 +449,8 @@ export default function AnalyzePage() {
                             }}
                             onClick={() => fileInputRef.current?.click()}
                         >
-                            <span className="text-5xl block mb-3">📁</span>
-                            <p className="text-text-secondary text-sm">
+                            <Upload className="w-10 h-10 text-primary-300 mx-auto mb-3" />
+                            <p className="text-text-secondary text-sm font-medium">
                                 {isAnalyzing ? "Analyzing..." : "Drag & drop or click to upload"}
                             </p>
                             <p className="text-text-muted text-xs mt-1">
@@ -478,28 +473,29 @@ export default function AnalyzePage() {
 
             {/* Error Display */}
             {error && (
-                <div className="glass rounded-2xl p-6 border-l-4 border-red-400 bg-red-50/50">
+                <div className="card-soft p-5 border-l-4 border-red-300 bg-red-50/50 flex items-start gap-3">
+                    <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
                     <p className="text-red-700 text-sm">{error}</p>
                 </div>
             )}
 
             {/* Results Display */}
             {result && (
-                <div className="glass rounded-2xl p-8 animate-fade-in">
-                    <h3 className="text-lg font-semibold mb-4 font-[family-name:var(--font-sans)]">
+                <div className="card-soft p-6 sm:p-8 animate-slide-up">
+                    <h3 className="text-lg font-bold mb-4 font-[family-name:var(--font-sans)]">
                         Analysis Result
                     </h3>
 
                     {/* Main emotion */}
                     <div className="flex items-center gap-4 mb-6">
-                        <div className="w-16 h-16 rounded-2xl bg-teal-50 flex items-center justify-center">
+                        <div className="w-16 h-16 rounded-2xl bg-primary-50 flex items-center justify-center">
                             <span className="text-4xl">
                                 {EMOTION_EMOJI[result.emotion_label as keyof typeof EMOTION_EMOJI] || "🔍"}
                             </span>
                         </div>
                         <div>
                             <div className="flex items-center gap-2 mb-1">
-                                <span className={`px-3 py-1 rounded-full text-sm font-semibold capitalize bg-teal-100 text-teal-800`}>
+                                <span className="px-3 py-1 rounded-full text-sm font-bold capitalize bg-primary-100 text-primary-800">
                                     {result.emotion_label}
                                 </span>
                                 <span className="text-xs text-text-muted">
@@ -514,13 +510,13 @@ export default function AnalyzePage() {
 
                     {/* Confidence bar */}
                     <div className="mb-6">
-                        <div className="flex justify-between text-xs text-text-muted mb-1">
-                            <span>Confidence</span>
-                            <span>{(result.confidence * 100).toFixed(1)}%</span>
+                        <div className="flex justify-between text-xs text-text-muted mb-1.5">
+                            <span className="font-medium">Confidence</span>
+                            <span className="font-semibold">{(result.confidence * 100).toFixed(1)}%</span>
                         </div>
-                        <div className="w-full h-3 bg-stone-100 rounded-full overflow-hidden">
+                        <div className="w-full h-3 bg-primary-50 rounded-full overflow-hidden">
                             <div
-                                className="h-full bg-gradient-to-r from-teal-400 to-teal-600 rounded-full transition-all duration-700"
+                                className="h-full bg-gradient-to-r from-primary-400 to-primary-600 rounded-full transition-all duration-700"
                                 style={{ width: `${result.confidence * 100}%` }}
                             />
                         </div>
@@ -529,19 +525,19 @@ export default function AnalyzePage() {
                     {/* All emotions breakdown */}
                     {result.all_emotions && (
                         <div className="mb-6 space-y-2">
-                            <p className="text-xs text-text-muted font-medium">All detected emotions</p>
+                            <p className="text-xs text-text-muted font-semibold">All detected emotions</p>
                             {Object.entries(result.all_emotions)
                                 .sort(([, a], [, b]) => b - a)
                                 .map(([label, score]) => (
                                     <div key={label} className="flex items-center gap-2">
                                         <span className="w-20 text-xs text-text-secondary capitalize">{label}</span>
-                                        <div className="flex-1 h-2 bg-stone-100 rounded-full overflow-hidden">
+                                        <div className="flex-1 h-2 bg-primary-50 rounded-full overflow-hidden">
                                             <div
-                                                className="h-full bg-teal-400/60 rounded-full"
+                                                className="h-full bg-primary-300/60 rounded-full"
                                                 style={{ width: `${score * 100}%` }}
                                             />
                                         </div>
-                                        <span className="text-xs text-text-muted w-12 text-right">
+                                        <span className="text-xs text-text-muted w-12 text-right font-medium">
                                             {(score * 100).toFixed(1)}%
                                         </span>
                                     </div>
@@ -552,7 +548,7 @@ export default function AnalyzePage() {
                     {/* Cry classes breakdown */}
                     {result.all_classes && (
                         <div className="mb-6 space-y-2">
-                            <p className="text-xs text-text-muted font-medium">Cry classification</p>
+                            <p className="text-xs text-text-muted font-semibold">Cry classification</p>
                             {Object.entries(result.all_classes)
                                 .sort(([, a], [, b]) => b - a)
                                 .map(([label, score]) => (
@@ -560,13 +556,13 @@ export default function AnalyzePage() {
                                         <span className="w-20 text-xs text-text-secondary capitalize">
                                             {label.replace(/_/g, " ")}
                                         </span>
-                                        <div className="flex-1 h-2 bg-stone-100 rounded-full overflow-hidden">
+                                        <div className="flex-1 h-2 bg-primary-50 rounded-full overflow-hidden">
                                             <div
-                                                className="h-full bg-blue-400/60 rounded-full"
+                                                className="h-full bg-sky/60 rounded-full"
                                                 style={{ width: `${score * 100}%` }}
                                             />
                                         </div>
-                                        <span className="text-xs text-text-muted w-12 text-right">
+                                        <span className="text-xs text-text-muted w-12 text-right font-medium">
                                             {(score * 100).toFixed(1)}%
                                         </span>
                                     </div>
@@ -575,19 +571,20 @@ export default function AnalyzePage() {
                     )}
 
                     {/* Save to timeline */}
-                    <div className="flex items-center gap-3 pt-4 border-t border-stone-200/50">
+                    <div className="flex items-center gap-3 pt-4 border-t border-primary-100/50">
                         {!saved ? (
                             <button
                                 onClick={handleSave}
                                 disabled={!selectedChild}
-                                className="px-5 py-2.5 bg-teal-600 text-white rounded-xl hover:bg-teal-700 transition-colors text-sm font-medium disabled:opacity-50"
+                                className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                💾 Save to Timeline
+                                <Save className="w-4 h-4" />
+                                Save to Timeline
                             </button>
                         ) : (
-                            <div className="flex items-center gap-2 text-teal-700">
-                                <span>✅</span>
-                                <span className="text-sm font-medium">Saved to timeline!</span>
+                            <div className="flex items-center gap-2 text-primary-700">
+                                <CheckCircle2 className="w-4 h-4" />
+                                <span className="text-sm font-semibold">Saved to timeline!</span>
                             </div>
                         )}
                         {!saved && selectedChild && (

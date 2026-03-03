@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     # ─── AI Reports ───────────────────────────────────────
     anthropic_api_key: str = ""
 
+    # ─── ML Models ────────────────────────────────────────
+    ml_model_cache_dir: str = ".cache/models"
+
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip() for o in self.api_cors_origins.split(",") if o.strip()]

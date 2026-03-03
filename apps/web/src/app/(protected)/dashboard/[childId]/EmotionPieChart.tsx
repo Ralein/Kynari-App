@@ -1,7 +1,17 @@
 "use client";
 
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-import { EMOTION_COLORS, EMOTION_EMOJI, type EmotionLabel } from "@kynari/shared";
+import { EMOTION_EMOJI, type EmotionLabel } from "@kynari/shared";
+
+/* Updated softer pastel emotion colors */
+const SOFT_EMOTION_COLORS: Record<string, string> = {
+    happy: "#86efac",
+    sad: "#93c5fd",
+    angry: "#fca5a5",
+    fearful: "#c4b5fd",
+    neutral: "#cbd5e1",
+    frustrated: "#fdba74",
+};
 
 interface EmotionPieChartProps {
     distribution: Record<string, number>;
@@ -14,7 +24,7 @@ export function EmotionPieChart({ distribution }: EmotionPieChartProps) {
             name: emotion,
             value: Math.round(value * 10) / 10,
             emoji: EMOTION_EMOJI[emotion as EmotionLabel] ?? "❓",
-            color: EMOTION_COLORS[emotion as EmotionLabel] ?? "#9CA3AF",
+            color: SOFT_EMOTION_COLORS[emotion] ?? "#cbd5e1",
         }))
         .sort((a, b) => b.value - a.value);
 
@@ -37,7 +47,7 @@ export function EmotionPieChart({ distribution }: EmotionPieChartProps) {
                             cy="50%"
                             innerRadius={45}
                             outerRadius={80}
-                            paddingAngle={2}
+                            paddingAngle={3}
                             dataKey="value"
                             strokeWidth={0}
                         >
@@ -54,10 +64,11 @@ export function EmotionPieChart({ distribution }: EmotionPieChartProps) {
                                 `${EMOTION_EMOJI[String(name) as EmotionLabel] ?? ""} ${name}`,
                             ]}
                             contentStyle={{
-                                borderRadius: "12px",
-                                border: "1px solid #e7e5e4",
-                                boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                                borderRadius: "14px",
+                                border: "1px solid #e9d5ff",
+                                boxShadow: "0 4px 16px rgba(147,51,234,0.08)",
                                 fontSize: "13px",
+                                fontFamily: "var(--font-body)",
                             }}
                         />
                     </PieChart>
@@ -75,7 +86,7 @@ export function EmotionPieChart({ distribution }: EmotionPieChartProps) {
                         <span className="text-sm text-text-secondary">
                             {item.emoji} {item.name}
                         </span>
-                        <span className="text-sm font-medium text-text-primary ml-auto">
+                        <span className="text-sm font-semibold text-text-primary ml-auto">
                             {item.value}%
                         </span>
                     </div>

@@ -14,6 +14,7 @@
   "dependencies": {
     "@clerk/nextjs": "^6.39.0",
     "@kynari/shared": "workspace:*",
+    "lucide-react": "^0.576.0",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
