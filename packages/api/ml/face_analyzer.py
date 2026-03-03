@@ -1,10 +1,13 @@
-"""Face emotion analyzer — detects baby faces and classifies emotions.
+"""Face distress analyzer — detects baby face and computes a stress/distress score.
 
 Pipeline:
-1. Face detection via MTCNN (lightweight, no GPU required)
-2. Emotion classification via ViT (trpakov/vit-face-expression)
+1. Face detection via MediaPipe Face Mesh
+2. Extract facial landmarks
+3. Compute stress features: mouth_openness, eye_squint, brow_tension
+4. Output a single distress_score (0.0 = calm, 1.0 = maximum distress)
 
-Falls back gracefully if models aren't downloaded yet.
+This is a SECONDARY signal — it does NOT predict needs on its own.
+It provides supplementary data to the multimodal fusion module.
 """
 
 import io
@@ -17,62 +20,98 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
-# Lazy-loaded singletons
-_face_detector = None
-_emotion_classifier = None
-
-# Emotion label mapping — ViT FER model outputs these 7 classes
-VIT_EMOTION_LABELS = [
-    "angry", "disgust", "fear", "happy", "neutral", "sad", "surprise"
-]
-
-# Map ViT labels → Kynari labels
-EMOTION_MAP = {
-    "angry": "angry",
-    "disgust": "frustrated",
-    "fear": "fearful",
-    "happy": "happy",
-    "neutral": "neutral",
-    "sad": "sad",
-    "surprise": "happy",   # babies surprised ≈ happy/engaged
-}
+# Lazy-loaded singleton
+_face_mesh = None
 
 
-def _load_face_detector():
-    """Lazy-load MTCNN face detector."""
-    global _face_detector
-    if _face_detector is None:
+def _load_face_mesh():
+    """Lazy-load MediaPipe Face Mesh."""
+    global _face_mesh
+    if _face_mesh is None:
         try:
-            from facenet_pytorch import MTCNN
-            _face_detector = MTCNN(
-                keep_all=True,
-                min_face_size=40,
-                thresholds=[0.6, 0.7, 0.7],
-                device="cpu",
+            import mediapipe as mp
+            _face_mesh = mp.solutions.face_mesh.FaceMesh(
+                static_image_mode=True,
+                max_num_faces=1,
+                refine_landmarks=True,
+                min_detection_confidence=0.5,
             )
-            logger.info("MTCNN face detector loaded")
+            logger.info("MediaPipe Face Mesh loaded")
         except Exception as e:
-            logger.error(f"Failed to load MTCNN: {e}")
-            raise RuntimeError("Face detector unavailable") from e
-    return _face_detector
+            logger.error(f"Failed to load MediaPipe Face Mesh: {e}")
+            raise RuntimeError("Face mesh unavailable") from e
+    return _face_mesh
 
 
-def _load_emotion_classifier():
-    """Lazy-load ViT emotion classifier from HuggingFace."""
-    global _emotion_classifier
-    if _emotion_classifier is None:
-        try:
-            from transformers import pipeline
-            _emotion_classifier = pipeline(
-                "image-classification",
-                model="trpakov/vit-face-expression",
-                device=-1,  # CPU
-            )
-            logger.info("ViT emotion classifier loaded")
-        except Exception as e:
-            logger.error(f"Failed to load emotion classifier: {e}")
-            raise RuntimeError("Emotion classifier unavailable") from e
-    return _emotion_classifier
+# ─── Landmark Indices (MediaPipe 468-point mesh) ──────────────
+
+# Mouth landmarks
+UPPER_LIP_TOP = 13
+LOWER_LIP_BOTTOM = 14
+LEFT_MOUTH_CORNER = 61
+RIGHT_MOUTH_CORNER = 291
+
+# Eye landmarks
+LEFT_EYE_TOP = 159
+LEFT_EYE_BOTTOM = 145
+RIGHT_EYE_TOP = 386
+RIGHT_EYE_BOTTOM = 374
+
+# Brow landmarks
+LEFT_BROW_INNER = 107
+LEFT_BROW_OUTER = 70
+RIGHT_BROW_INNER = 336
+RIGHT_BROW_OUTER = 300
+
+# Nose tip (reference point)
+NOSE_TIP = 1
+
+
+def _landmark_distance(landmarks, idx_a: int, idx_b: int) -> float:
+    """Euclidean distance between two landmarks."""
+    a = landmarks[idx_a]
+    b = landmarks[idx_b]
+    return float(np.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2))
+
+
+def _compute_mouth_openness(landmarks) -> float:
+    """How open the mouth is (0.0 = closed, 1.0 = wide open).
+
+    Ratio of vertical mouth opening to horizontal mouth width.
+    """
+    vertical = _landmark_distance(landmarks, UPPER_LIP_TOP, LOWER_LIP_BOTTOM)
+    horizontal = _landmark_distance(landmarks, LEFT_MOUTH_CORNER, RIGHT_MOUTH_CORNER)
+    if horizontal < 1e-6:
+        return 0.0
+    ratio = vertical / horizontal
+    # Normalize: typical range 0.05 (closed) to 0.6 (wide open cry)
+    return float(min(max((ratio - 0.05) / 0.55, 0.0), 1.0))
+
+
+def _compute_eye_squint(landmarks) -> float:
+    """How squinted/closed the eyes are (0.0 = open, 1.0 = tightly shut).
+
+    Inverse of eye opening ratio.
+    """
+    left_v = _landmark_distance(landmarks, LEFT_EYE_TOP, LEFT_EYE_BOTTOM)
+    right_v = _landmark_distance(landmarks, RIGHT_EYE_TOP, RIGHT_EYE_BOTTOM)
+    avg_opening = (left_v + right_v) / 2.0
+    # Normalize: typical range 0.01 (shut) to 0.05 (wide open)
+    openness = min(max((avg_opening - 0.005) / 0.045, 0.0), 1.0)
+    return float(1.0 - openness)  # Invert: squint = 1.0 means eyes shut
+
+
+def _compute_brow_tension(landmarks) -> float:
+    """How furrowed/tense the brows are (0.0 = relaxed, 1.0 = very tense).
+
+    Measured by how close inner brow points are to nose bridge.
+    """
+    left_inner = _landmark_distance(landmarks, LEFT_BROW_INNER, NOSE_TIP)
+    right_inner = _landmark_distance(landmarks, RIGHT_BROW_INNER, NOSE_TIP)
+    avg_dist = (left_inner + right_inner) / 2.0
+    # Normalize: typical range 0.08 (furrowed/close) to 0.15 (raised/relaxed)
+    relaxation = min(max((avg_dist - 0.06) / 0.09, 0.0), 1.0)
+    return float(1.0 - relaxation)  # Invert: tension = 1.0 means very furrowed
 
 
 def decode_image(data: str | bytes) -> Image.Image:
@@ -87,91 +126,63 @@ def decode_image(data: str | bytes) -> Image.Image:
     return Image.open(io.BytesIO(raw)).convert("RGB")
 
 
-def detect_faces(image: Image.Image) -> list[dict[str, Any]]:
-    """Detect faces in an image, return bounding boxes + probabilities."""
-    detector = _load_face_detector()
-    boxes, probs = detector.detect(image)
+def analyze_face(image: Image.Image) -> dict[str, Any]:
+    """Full pipeline: detect face → extract landmarks → compute distress score.
 
-    if boxes is None:
-        return []
-
-    faces = []
-    for box, prob in zip(boxes, probs):
-        x1, y1, x2, y2 = [int(c) for c in box]
-        faces.append({
-            "bbox": [x1, y1, x2, y2],
-            "detection_confidence": float(prob),
-        })
-    return faces
-
-
-def classify_emotion(face_crop: Image.Image) -> dict[str, Any]:
-    """Classify emotion from a cropped face image."""
-    classifier = _load_emotion_classifier()
-    results = classifier(face_crop)
-
-    # results is a list of {label, score} sorted by score descending
-    all_emotions = {}
-    for r in results:
-        kynari_label = EMOTION_MAP.get(r["label"], r["label"])
-        # Merge duplicate mappings (e.g. both "surprise" and "happy" → "happy")
-        if kynari_label in all_emotions:
-            all_emotions[kynari_label] = max(all_emotions[kynari_label], r["score"])
-        else:
-            all_emotions[kynari_label] = r["score"]
-
-    top_label = max(all_emotions, key=all_emotions.get)
-    return {
-        "emotion_label": top_label,
-        "confidence": round(all_emotions[top_label], 4),
-        "all_emotions": {k: round(v, 4) for k, v in sorted(
-            all_emotions.items(), key=lambda x: x[1], reverse=True
-        )},
-    }
-
-
-def analyze_image(image: Image.Image) -> dict[str, Any]:
-    """Full pipeline: detect faces → classify emotions for each face.
-
-    Returns the result for the largest/most-prominent face.
+    Returns distress_score (0.0–1.0) and individual stress features.
+    Does NOT predict needs — this is a secondary signal for the fusion module.
     """
-    faces = detect_faces(image)
-    if not faces:
+    face_mesh = _load_face_mesh()
+
+    # Convert PIL → numpy array for MediaPipe
+    img_array = np.array(image)
+    results = face_mesh.process(img_array)
+
+    if not results.multi_face_landmarks:
         return {
             "success": False,
             "error": "no_face_detected",
             "message": "No face detected in the image. Please try again with a clearer photo of your baby's face.",
         }
 
-    # Pick the largest face (biggest bounding box area)
-    def face_area(f):
-        b = f["bbox"]
-        return (b[2] - b[0]) * (b[3] - b[1])
+    # Use first (largest/most confident) face
+    landmarks = results.multi_face_landmarks[0].landmark
 
-    faces.sort(key=face_area, reverse=True)
-    best_face = faces[0]
+    # Compute stress features
+    mouth_openness = _compute_mouth_openness(landmarks)
+    eye_squint = _compute_eye_squint(landmarks)
+    brow_tension = _compute_brow_tension(landmarks)
 
-    # Crop the face with some padding
-    bbox = best_face["bbox"]
-    w, h = image.size
-    pad_x = int((bbox[2] - bbox[0]) * 0.15)
-    pad_y = int((bbox[3] - bbox[1]) * 0.15)
-    crop_box = (
-        max(0, bbox[0] - pad_x),
-        max(0, bbox[1] - pad_y),
-        min(w, bbox[2] + pad_x),
-        min(h, bbox[3] + pad_y),
+    # Weighted distress score
+    # Mouth openness is strongest indicator of crying
+    distress_score = (
+        mouth_openness * 0.50 +
+        eye_squint * 0.30 +
+        brow_tension * 0.20
     )
-    face_crop = image.crop(crop_box).resize((224, 224))
+    distress_score = round(min(max(distress_score, 0.0), 1.0), 4)
 
-    emotion = classify_emotion(face_crop)
+    # Classify intensity level
+    if distress_score < 0.2:
+        intensity = "calm"
+    elif distress_score < 0.4:
+        intensity = "mild"
+    elif distress_score < 0.6:
+        intensity = "moderate"
+    elif distress_score < 0.8:
+        intensity = "high"
+    else:
+        intensity = "severe"
 
     return {
         "success": True,
         "modality": "face",
-        "emotion_label": emotion["emotion_label"],
-        "confidence": emotion["confidence"],
-        "all_emotions": emotion["all_emotions"],
-        "face_bbox": best_face["bbox"],
-        "faces_detected": len(faces),
+        "distress_score": distress_score,
+        "distress_intensity": intensity,
+        "stress_features": {
+            "mouth_openness": round(mouth_openness, 4),
+            "eye_squint": round(eye_squint, 4),
+            "brow_tension": round(brow_tension, 4),
+        },
+        "faces_detected": len(results.multi_face_landmarks),
     }

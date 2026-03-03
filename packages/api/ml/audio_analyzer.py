@@ -1,54 +1,62 @@
-"""Audio cry analyzer — classifies baby cry reasons from audio.
+"""Baby cry need analyzer — classifies baby cry needs from audio.
 
 Pipeline:
 1. Load audio via librosa (supports wav, mp3, m4a, ogg)
-2. Extract MFCC features
-3. Classify using HuggingFace pipeline (foduucom/baby-cry-classification)
+2. Extract audio features (duration, energy, pitch)
+3. Generate Mel spectrogram (for frontend visualization)
+4. Classify cry reason using HuggingFace pipeline (foduucom/baby-cry-classification)
+5. Map cry reasons directly to need labels
 
-Cry reasons → Kynari emotion labels:
-    hungry      → frustrated
-    belly_pain  → sad
-    burping     → neutral
-    discomfort  → angry
-    tired       → neutral
+Need labels:
+    hungry      → hungry
+    belly_pain  → pain
+    discomfort  → pain
+    tired       → sleepy
+    burping     → calm
 """
 
 import io
+import base64
 import logging
 import tempfile
 from typing import Any
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
 # Lazy-loaded singleton
 _cry_classifier = None
 
-# Map baby cry reasons → Kynari emotion labels
-CRY_REASON_MAP = {
-    "hungry": "frustrated",
-    "belly_pain": "sad",
-    "burping": "neutral",
-    "discomfort": "angry",
-    "tired": "neutral",
-    # Fallbacks for alternative label formats
-    "Hungry": "frustrated",
-    "Belly_pain": "sad",
-    "Burping": "neutral",
-    "Discomfort": "angry",
-    "Tired": "neutral",
-    "belly pain": "sad",
-    "hunger": "frustrated",
-    "tiredness": "neutral",
+# Map baby cry model outputs → Kynari need labels
+CRY_TO_NEED_MAP = {
+    "hungry": "hungry",
+    "belly_pain": "pain",
+    "burping": "calm",
+    "discomfort": "pain",
+    "tired": "sleepy",
+    # Case-insensitive fallbacks
+    "Hungry": "hungry",
+    "Belly_pain": "pain",
+    "Burping": "calm",
+    "Discomfort": "pain",
+    "Tired": "sleepy",
+    "belly pain": "pain",
+    "hunger": "hungry",
+    "tiredness": "sleepy",
 }
 
-# Human-friendly cry reason descriptions
-CRY_DESCRIPTIONS = {
-    "hungry": "Your baby might be hungry",
-    "belly_pain": "Your baby might have belly pain or gas",
-    "burping": "Your baby might need burping",
-    "discomfort": "Your baby seems uncomfortable",
-    "tired": "Your baby might be tired and sleepy",
+# Human-friendly need descriptions
+NEED_DESCRIPTIONS = {
+    "hungry": "Your baby might be hungry 🍼",
+    "pain": "Your baby might have belly pain or gas 🤕",
+    "calm": "Your baby seems calm or needs burping 😌",
+    "sleepy": "Your baby might be tired and sleepy 😴",
+    "diaper": "Your baby might need a diaper change 💩",
 }
+
+# All possible need labels
+NEED_LABELS = ["hungry", "diaper", "sleepy", "pain", "calm"]
 
 
 def _load_cry_classifier():
@@ -69,6 +77,68 @@ def _load_cry_classifier():
     return _cry_classifier
 
 
+def generate_spectrogram_b64(y: np.ndarray, sr: int) -> str | None:
+    """Generate a Mel spectrogram image and return as base64 PNG.
+
+    Used by the frontend to display a visual representation of the cry.
+    """
+    try:
+        import librosa
+        import librosa.display
+
+        # Generate Mel spectrogram
+        S = librosa.feature.melspectrogram(y=y, sr=sr, n_mels=128, fmax=8000)
+        S_dB = librosa.power_to_db(S, ref=np.max)
+
+        # Render to image without matplotlib GUI
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        fig, ax = plt.subplots(1, 1, figsize=(6, 3), dpi=100)
+        librosa.display.specshow(S_dB, sr=sr, x_axis="time", y_axis="mel", ax=ax, cmap="magma")
+        ax.set_title("")
+        ax.set_xlabel("")
+        ax.set_ylabel("")
+        fig.tight_layout(pad=0.5)
+
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", bbox_inches="tight", transparent=True)
+        plt.close(fig)
+        buf.seek(0)
+        return base64.b64encode(buf.read()).decode("utf-8")
+    except Exception as e:
+        logger.warning(f"Spectrogram generation failed: {e}")
+        return None
+
+
+def extract_audio_features(y: np.ndarray, sr: int) -> dict[str, Any]:
+    """Extract basic audio features for richer metadata."""
+    import librosa
+
+    duration = len(y) / sr
+    rms = float(np.sqrt(np.mean(y**2)))
+
+    # Pitch (fundamental frequency)
+    try:
+        pitches, magnitudes = librosa.piptrack(y=y, sr=sr)
+        pitch_values = pitches[magnitudes > np.median(magnitudes)]
+        pitch_values = pitch_values[pitch_values > 0]
+        mean_pitch = float(np.mean(pitch_values)) if len(pitch_values) > 0 else 0.0
+    except Exception:
+        mean_pitch = 0.0
+
+    # Zero crossing rate (indicates signal noisiness)
+    zcr = float(np.mean(librosa.feature.zero_crossing_rate(y)))
+
+    return {
+        "duration_seconds": round(duration, 2),
+        "rms_energy": round(rms, 6),
+        "mean_pitch_hz": round(mean_pitch, 1),
+        "zero_crossing_rate": round(zcr, 6),
+    }
+
+
 def analyze_audio_bytes(audio_data: bytes, filename: str = "audio.wav") -> dict[str, Any]:
     """Analyze audio from raw bytes.
 
@@ -83,13 +153,13 @@ def analyze_audio_bytes(audio_data: bytes, filename: str = "audio.wav") -> dict[
 
 
 def analyze_audio_file(file_path: str) -> dict[str, Any]:
-    """Full pipeline: load audio → classify cry reason.
+    """Full pipeline: load audio → extract features → generate spectrogram → classify need.
 
     Args:
         file_path: Path to an audio file (wav/mp3/m4a/ogg)
 
     Returns:
-        Analysis result dict with emotion label, confidence, cry reason, etc.
+        Analysis result dict with need label, confidence, spectrogram, etc.
     """
     try:
         import librosa
@@ -119,6 +189,12 @@ def analyze_audio_file(file_path: str) -> dict[str, Any]:
             "message": "Audio is too short. Please record at least 1 second of audio.",
         }
 
+    # Extract audio features
+    audio_features = extract_audio_features(y, sr)
+
+    # Generate spectrogram for frontend display
+    spectrogram_b64 = generate_spectrogram_b64(y, sr)
+
     # Run classification
     try:
         classifier = _load_cry_classifier()
@@ -131,28 +207,43 @@ def analyze_audio_file(file_path: str) -> dict[str, Any]:
             "message": "Failed to classify the audio. Please try again.",
         }
 
-    # Parse results
-    all_classes = {}
+    # Parse results → need labels
+    raw_classes = {}
+    need_scores: dict[str, float] = {label: 0.0 for label in NEED_LABELS}
+
     for r in results:
         label = r["label"].lower().replace(" ", "_")
-        all_classes[label] = round(r["score"], 4)
+        score = r["score"]
+        raw_classes[label] = round(score, 4)
 
-    top_label = max(all_classes, key=all_classes.get)
-    top_confidence = all_classes[top_label]
+        # Map to need label and accumulate
+        need_label = CRY_TO_NEED_MAP.get(label)
+        if need_label:
+            need_scores[need_label] = max(need_scores[need_label], score)
 
-    # Map cry reason to Kynari emotion
-    emotion_label = CRY_REASON_MAP.get(top_label, "neutral")
+    # Normalize need scores so they sum to 1
+    total = sum(need_scores.values())
+    if total > 0:
+        need_scores = {k: round(v / total, 4) for k, v in need_scores.items()}
+
+    # Primary and secondary needs
+    sorted_needs = sorted(need_scores.items(), key=lambda x: x[1], reverse=True)
+    primary_need = sorted_needs[0][0]
+    primary_confidence = sorted_needs[0][1]
+    secondary_need = sorted_needs[1][0] if len(sorted_needs) > 1 else None
 
     # Get human-friendly description
-    description = CRY_DESCRIPTIONS.get(top_label, f"Detected: {top_label}")
+    description = NEED_DESCRIPTIONS.get(primary_need, f"Detected: {primary_need}")
 
     return {
         "success": True,
         "modality": "voice",
-        "cry_reason": top_label,
-        "cry_description": description,
-        "emotion_label": emotion_label,
-        "confidence": round(top_confidence, 4),
-        "all_classes": all_classes,
-        "audio_duration_seconds": round(duration, 2),
+        "need_label": primary_need,
+        "need_description": description,
+        "confidence": round(primary_confidence, 4),
+        "secondary_need": secondary_need,
+        "all_needs": need_scores,
+        "raw_model_classes": raw_classes,
+        "audio_features": audio_features,
+        "spectrogram_b64": spectrogram_b64,
     }
