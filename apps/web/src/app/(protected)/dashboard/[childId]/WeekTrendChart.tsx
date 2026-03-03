@@ -8,7 +8,16 @@ import {
     Tooltip,
     ResponsiveContainer,
 } from "recharts";
-import { EMOTION_COLORS, EMOTION_LABELS, type DailySummary } from "@kynari/shared";
+import { EMOTION_LABELS, type DailySummary } from "@kynari/shared";
+
+const SOFT_EMOTION_COLORS: Record<string, string> = {
+    happy: "#86efac",
+    sad: "#93c5fd",
+    angry: "#fca5a5",
+    fearful: "#c4b5fd",
+    neutral: "#cbd5e1",
+    frustrated: "#fdba74",
+};
 
 interface WeekTrendChartProps {
     summaries: DailySummary[];
@@ -23,7 +32,6 @@ export function WeekTrendChart({ summaries }: WeekTrendChartProps) {
         );
     }
 
-    // Transform summaries into chart data
     const data = summaries.map((s) => {
         const day = new Date(s.date).toLocaleDateString("en-US", {
             weekday: "short",
@@ -44,37 +52,37 @@ export function WeekTrendChart({ summaries }: WeekTrendChartProps) {
                 >
                     <XAxis
                         dataKey="day"
-                        tick={{ fontSize: 12, fill: "#a8a29e" }}
+                        tick={{ fontSize: 12, fill: "#9f99b3" }}
                         axisLine={false}
                         tickLine={false}
                     />
                     <YAxis
-                        tick={{ fontSize: 11, fill: "#a8a29e" }}
+                        tick={{ fontSize: 11, fill: "#9f99b3" }}
                         axisLine={false}
                         tickLine={false}
                         tickFormatter={(v) => `${v}%`}
                     />
                     <Tooltip
                         contentStyle={{
-                            borderRadius: "12px",
-                            border: "1px solid #e7e5e4",
-                            boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                            borderRadius: "14px",
+                            border: "1px solid #e9d5ff",
+                            boxShadow: "0 4px 16px rgba(147,51,234,0.08)",
                             fontSize: "13px",
+                            fontFamily: "var(--font-body)",
                         }}
                         formatter={(value, name) => [
                             `${Math.round(Number(value))}%`,
                             String(name),
                         ]}
                     />
-                    {/* Render stacked areas — "quietest" emotions at bottom */}
                     {[...EMOTION_LABELS].reverse().map((emotion) => (
                         <Area
                             key={emotion}
                             type="monotone"
                             dataKey={emotion}
                             stackId="1"
-                            stroke={EMOTION_COLORS[emotion]}
-                            fill={EMOTION_COLORS[emotion]}
+                            stroke={SOFT_EMOTION_COLORS[emotion] ?? "#cbd5e1"}
+                            fill={SOFT_EMOTION_COLORS[emotion] ?? "#cbd5e1"}
                             fillOpacity={0.6}
                             strokeWidth={0}
                         />

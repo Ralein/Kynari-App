@@ -1,42 +1,53 @@
 @import "tailwindcss";
 
-/* ─── Kynari Design System ───────────────────────────────── */
+/* ─── Kynari Design System — "Lavender Dream" ────────────── */
 
 @theme {
-  --color-teal-50: #f0fdfa;
-  --color-teal-100: #ccfbf1;
-  --color-teal-200: #99f6e4;
-  --color-teal-300: #5eead4;
-  --color-teal-400: #2dd4bf;
-  --color-teal-500: #14b8a6;
-  --color-teal-600: #0d9488;
-  --color-teal-700: #0f766e;
-  --color-teal-800: #115e59;
-  --color-teal-900: #134e4a;
+  /* ── Primary Palette (Lavender/Purple) ──────────────────── */
+  --color-primary-50: #faf5ff;
+  --color-primary-100: #f3e8ff;
+  --color-primary-200: #e9d5ff;
+  --color-primary-300: #d8b4fe;
+  --color-primary-400: #c084fc;
+  --color-primary-500: #a855f7;
+  --color-primary-600: #9333ea;
+  --color-primary-700: #7e22ce;
+  --color-primary-800: #6b21a8;
+  --color-primary-900: #581c87;
 
-  --color-coral: #f97316;
-  --color-coral-light: #fed7aa;
+  /* ── Warm Accents ───────────────────────────────────────── */
+  --color-peach: #fdba74;
+  --color-peach-light: #fed7aa;
+  --color-mint: #86efac;
+  --color-mint-dark: #22c55e;
+  --color-blush: #fda4af;
+  --color-sky: #7dd3fc;
 
-  --color-surface: #fafaf9;
+  /* ── Surface & Text ─────────────────────────────────────── */
+  --color-surface: #faf8ff;
   --color-surface-card: #ffffff;
-  --color-surface-elevated: #f5f5f4;
+  --color-surface-elevated: #f5f0ff;
+  --color-surface-warm: #fef7f0;
 
-  --color-text-primary: #1c1917;
-  --color-text-secondary: #57534e;
-  --color-text-muted: #a8a29e;
+  --color-text-primary: #1e1b2e;
+  --color-text-secondary: #5b5675;
+  --color-text-muted: #9f99b3;
 
-  /* Emotion Colors */
-  --color-emotion-happy: #34d399;
-  --color-emotion-sad: #60a5fa;
-  --color-emotion-angry: #f87171;
-  --color-emotion-fearful: #a78bfa;
-  --color-emotion-neutral: #9ca3af;
-  --color-emotion-frustrated: #fb923c;
+  /* ── Emotion Colors (Softer Pastels) ────────────────────── */
+  --color-emotion-happy: #86efac;
+  --color-emotion-sad: #93c5fd;
+  --color-emotion-angry: #fca5a5;
+  --color-emotion-fearful: #c4b5fd;
+  --color-emotion-neutral: #cbd5e1;
+  --color-emotion-frustrated: #fdba74;
 
-  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  /* ── Typography ─────────────────────────────────────────── */
+  --font-sans: "Nunito", ui-sans-serif, system-ui, sans-serif;
   --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
 
+  /* ── Animation ──────────────────────────────────────────── */
   --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 /* ─── Base ───────────────────────────────────────────────── */
@@ -49,38 +60,117 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: var(--font-sans);
-  font-weight: 600;
-  letter-spacing: -0.025em;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 /* ─── Animations ─────────────────────────────────────────── */
 
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-8px); }
+
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
 }
 
 @keyframes pulse-soft {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.6;
+  }
 }
 
 @keyframes gradient-shift {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes wiggle {
+
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+
+  25% {
+    transform: rotate(-3deg);
+  }
+
+  75% {
+    transform: rotate(3deg);
+  }
+}
+
+@keyframes bounce-gentle {
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 .animate-fade-in {
@@ -100,30 +190,120 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .animate-float {
-  animation: float 4s ease-in-out infinite;
+  animation: float 5s ease-in-out infinite;
 }
 
 .animate-pulse-soft {
-  animation: pulse-soft 2s ease-in-out infinite;
+  animation: pulse-soft 2.5s ease-in-out infinite;
 }
 
 .animate-gradient {
   background-size: 200% 200%;
-  animation: gradient-shift 6s ease infinite;
+  animation: gradient-shift 8s ease infinite;
+}
+
+.animate-wiggle {
+  animation: wiggle 2s ease-in-out infinite;
+}
+
+.animate-bounce-gentle {
+  animation: bounce-gentle 2s ease-in-out infinite;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.5s var(--ease-spring) both;
 }
 
 /* ─── Glass Effect ───────────────────────────────────────── */
 
 .glass {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
 }
 
-.glass-dark {
-  background: rgba(15, 118, 110, 0.08);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(13, 148, 136, 0.15);
+.glass-purple {
+  background: rgba(147, 51, 234, 0.06);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(168, 85, 247, 0.12);
+}
+
+/* ─── Soft Card ──────────────────────────────────────────── */
+
+.card-soft {
+  background: #ffffff;
+  border: 1px solid rgba(233, 213, 255, 0.5);
+  border-radius: 20px;
+  box-shadow:
+    0 1px 3px rgba(147, 51, 234, 0.04),
+    0 8px 24px rgba(147, 51, 234, 0.06);
+  transition: all 0.3s var(--ease-spring);
+}
+
+.card-soft:hover {
+  box-shadow:
+    0 2px 6px rgba(147, 51, 234, 0.06),
+    0 12px 32px rgba(147, 51, 234, 0.1);
+  transform: translateY(-2px);
+}
+
+/* ─── Button Styles ──────────────────────────────────────── */
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.75rem;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-500));
+  color: white;
+  font-weight: 700;
+  font-size: 0.875rem;
+  box-shadow:
+    0 4px 14px rgba(147, 51, 234, 0.25),
+    0 0 0 0 rgba(147, 51, 234, 0);
+  transition: all 0.3s var(--ease-spring);
+}
+
+.btn-primary:hover {
+  box-shadow:
+    0 6px 20px rgba(147, 51, 234, 0.35),
+    0 0 0 0 rgba(147, 51, 234, 0);
+  transform: translateY(-1px) scale(1.02);
+}
+
+.btn-primary:active {
+  transform: translateY(0) scale(0.98);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border-radius: 9999px;
+  background: var(--color-primary-100);
+  color: var(--color-primary-700);
+  font-weight: 600;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: var(--color-primary-200);
+}
+
+/* ─── Reduced Motion ─────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

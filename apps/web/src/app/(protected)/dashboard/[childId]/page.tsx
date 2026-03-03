@@ -14,6 +14,7 @@ import { EmotionPieChart } from "./EmotionPieChart";
 import { WeekTrendChart } from "./WeekTrendChart";
 import { HourlyTimeline } from "./HourlyTimeline";
 import { CalibrationBanner } from "./CalibrationBanner";
+import { ChevronRight, Search, PieChart, TrendingUp, Clock, BarChart3 } from "lucide-react";
 
 export default function ChildReportPage({
     params,
@@ -32,8 +33,8 @@ export default function ChildReportPage({
     if (childLoading) {
         return (
             <div className="animate-fade-in space-y-6">
-                <div className="h-8 w-48 bg-stone-200 rounded animate-pulse" />
-                <div className="glass rounded-2xl p-8 h-64 animate-pulse" />
+                <div className="h-8 w-48 bg-primary-100 rounded-lg animate-pulse" />
+                <div className="card-soft p-8 h-64 animate-pulse" />
             </div>
         );
     }
@@ -43,17 +44,17 @@ export default function ChildReportPage({
         : null;
 
     return (
-        <div className="animate-fade-in space-y-6">
+        <div className="animate-fade-in space-y-5">
             {/* Breadcrumb */}
-            <div className="flex items-center gap-2 text-sm text-text-muted">
+            <div className="flex items-center gap-1.5 text-sm text-text-muted">
                 <Link
                     href="/dashboard"
-                    className="hover:text-teal-600 transition-colors"
+                    className="hover:text-primary-600 transition-colors"
                 >
                     Dashboard
                 </Link>
-                <span>/</span>
-                <span className="text-text-primary font-medium">
+                <ChevronRight className="w-3.5 h-3.5" />
+                <span className="text-text-primary font-semibold">
                     {child?.name ?? "Child Report"}
                 </span>
             </div>
@@ -67,9 +68,9 @@ export default function ChildReportPage({
             )}
 
             {/* Analyze CTA */}
-            <div className="glass rounded-2xl p-6 flex items-center justify-between">
+            <div className="card-soft p-5 flex items-center justify-between">
                 <div>
-                    <h3 className="font-semibold font-[family-name:var(--font-sans)]">
+                    <h3 className="font-bold font-[family-name:var(--font-sans)]">
                         Analyze {child?.name}&apos;s emotions
                     </h3>
                     <p className="text-sm text-text-muted mt-0.5">
@@ -78,35 +79,36 @@ export default function ChildReportPage({
                 </div>
                 <Link
                     href="/analyze"
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-teal-600 to-teal-500 text-white font-semibold text-sm shadow-lg shadow-teal-500/20 hover:shadow-teal-500/30 transition-all duration-200 hover:scale-[1.02] shrink-0"
+                    className="btn-primary shrink-0"
                 >
-                    <span>🔍</span>
+                    <Search className="w-4 h-4" />
                     Analyze Now
                 </Link>
             </div>
 
             {/* Today's Summary Card */}
-            <div className="glass rounded-2xl p-8">
-                <div className="flex items-center gap-3 mb-6">
-                    <h2 className="text-xl font-bold font-[family-name:var(--font-sans)]">
+            <div className="card-soft p-6 sm:p-8">
+                <div className="flex items-center gap-2 mb-5">
+                    <BarChart3 className="w-4.5 h-4.5 text-primary-500" />
+                    <h2 className="text-lg font-bold font-[family-name:var(--font-sans)]">
                         Today&apos;s Summary
                     </h2>
-                    <span className="text-xs text-text-muted px-2 py-0.5 bg-stone-100 rounded-full">
+                    <span className="text-xs text-text-muted px-2 py-0.5 bg-primary-50 rounded-full ml-auto">
                         {today}
                     </span>
                 </div>
 
                 {summary ? (
-                    <div className="space-y-6">
+                    <div className="space-y-5">
                         {/* Dominant emotion + insight */}
                         <div className="flex items-start gap-4">
-                            <div className="w-14 h-14 rounded-2xl bg-stone-50 flex items-center justify-center shrink-0">
+                            <div className="w-14 h-14 rounded-2xl bg-primary-50 flex items-center justify-center shrink-0">
                                 <span className="text-3xl">{dominantEmoji}</span>
                             </div>
                             <div>
                                 <div className="flex items-center gap-2 mb-1">
                                     <span
-                                        className={`px-3 py-1 rounded-full text-sm font-medium bg-emotion-${summary.dominant_emotion}/15`}
+                                        className={`px-3 py-1 rounded-full text-sm font-semibold bg-emotion-${summary.dominant_emotion}/20`}
                                     >
                                         {summary.dominant_emotion}
                                     </span>
@@ -145,9 +147,9 @@ export default function ChildReportPage({
                             <div className="text-xs text-text-muted">
                                 Baseline deviation:{" "}
                                 <span
-                                    className={`font-medium ${Math.abs(summary.baseline_deviation) > 1.5
-                                        ? "text-coral"
-                                        : "text-teal-600"
+                                    className={`font-semibold ${Math.abs(summary.baseline_deviation) > 1.5
+                                        ? "text-blush"
+                                        : "text-primary-600"
                                         }`}
                                 >
                                     {summary.baseline_deviation > 0 ? "+" : ""}
@@ -158,8 +160,8 @@ export default function ChildReportPage({
                     </div>
                 ) : (
                     <div className="text-center py-8">
-                        <div className="w-16 h-16 rounded-full bg-stone-50 flex items-center justify-center mx-auto mb-4">
-                            <span className="text-3xl">📊</span>
+                        <div className="w-16 h-16 rounded-2xl bg-primary-50 flex items-center justify-center mx-auto mb-4">
+                            <BarChart3 className="w-8 h-8 text-primary-300" />
                         </div>
                         <p className="text-text-secondary text-sm">
                             No data recorded today yet. Start a monitoring session to
@@ -170,12 +172,15 @@ export default function ChildReportPage({
             </div>
 
             {/* Charts Grid */}
-            <div className="grid lg:grid-cols-2 gap-6">
+            <div className="grid lg:grid-cols-2 gap-5">
                 {/* Emotion Pie Chart */}
-                <div className="glass rounded-2xl p-8">
-                    <h3 className="text-lg font-semibold mb-4 font-[family-name:var(--font-sans)]">
-                        Emotion Breakdown
-                    </h3>
+                <div className="card-soft p-6 sm:p-8">
+                    <div className="flex items-center gap-2 mb-4">
+                        <PieChart className="w-4 h-4 text-primary-500" />
+                        <h3 className="text-base font-bold font-[family-name:var(--font-sans)]">
+                            Emotion Breakdown
+                        </h3>
+                    </div>
                     {summary?.emotion_distribution ? (
                         <EmotionPieChart
                             distribution={summary.emotion_distribution}
@@ -188,19 +193,25 @@ export default function ChildReportPage({
                 </div>
 
                 {/* 7-Day Trend */}
-                <div className="glass rounded-2xl p-8">
-                    <h3 className="text-lg font-semibold mb-4 font-[family-name:var(--font-sans)]">
-                        7-Day Trend
-                    </h3>
+                <div className="card-soft p-6 sm:p-8">
+                    <div className="flex items-center gap-2 mb-4">
+                        <TrendingUp className="w-4 h-4 text-primary-500" />
+                        <h3 className="text-base font-bold font-[family-name:var(--font-sans)]">
+                            7-Day Trend
+                        </h3>
+                    </div>
                     <WeekTrendChart summaries={weekSummaries ?? []} />
                 </div>
             </div>
 
             {/* Hourly Timeline */}
-            <div className="glass rounded-2xl p-8">
-                <h3 className="text-lg font-semibold mb-4 font-[family-name:var(--font-sans)]">
-                    Today&apos;s Timeline
-                </h3>
+            <div className="card-soft p-6 sm:p-8">
+                <div className="flex items-center gap-2 mb-4">
+                    <Clock className="w-4 h-4 text-primary-500" />
+                    <h3 className="text-base font-bold font-[family-name:var(--font-sans)]">
+                        Today&apos;s Timeline
+                    </h3>
+                </div>
                 <HourlyTimeline groups={timeline ?? []} />
             </div>
         </div>

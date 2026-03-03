@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
-import { Outfit, Inter } from "next/font/google";
+import { Nunito, Inter } from "next/font/google";
 import "./globals.css";
 
-const outfit = Outfit({
+const nunito = Nunito({
   subsets: ["latin"],
   variable: "--font-sans",
   display: "swap",
-  weight: ["400", "500", "600", "700"],
+  weight: ["400", "500", "600", "700", "800"],
 });
 
 const inter = Inter({
@@ -48,13 +48,13 @@ export default function RootLayout({
       appearance={{
         cssLayerName: "clerk",
         variables: {
-          colorPrimary: "#0d9488",
+          colorPrimary: "#9333ea",
           colorTextOnPrimaryBackground: "#ffffff",
-          borderRadius: "0.75rem",
+          borderRadius: "0.875rem",
         },
       }}
     >
-      <html lang="en" className={`${outfit.variable} ${inter.variable}`}>
+      <html lang="en" className={`${nunito.variable} ${inter.variable}`}>
         <body className="min-h-screen bg-surface antialiased">{children}</body>
       </html>
     </ClerkProvider>
