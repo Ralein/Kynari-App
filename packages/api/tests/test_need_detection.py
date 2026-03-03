@@ -103,20 +103,22 @@ class TestFaceAnalyzer:
         from ml.face_analyzer import _compute_distress_from_blendshapes
 
         # All zeros → low distress
-        calm = {name: 0.0 for name in [
-            "browDownLeft", "eyeSquintLeft", "jawOpen",
-            "mouthFrownLeft", "mouthSmileLeft",
-        ]}
+        calm = {
+            "browDownLeft": 0.0, "browDownRight": 0.0, "browInnerUp": 0.0,
+            "eyeSquintLeft": 0.0, "eyeSquintRight": 0.0,
+            "jawOpen": 0.0, "mouthFrownLeft": 0.0,
+            "mouthSmileLeft": 0.0,
+        }
         score_calm = _compute_distress_from_blendshapes(calm)
         assert 0.0 <= score_calm <= 1.0
 
-        # High distress signals
+        # High distress signals (realistic MediaPipe values: 0.2–0.5)
         distressed = {
-            "browDownLeft": 0.9, "browDownRight": 0.9,
-            "eyeSquintLeft": 0.8, "eyeSquintRight": 0.8,
-            "jawOpen": 0.7, "mouthStretchLeft": 0.9, "mouthStretchRight": 0.9,
-            "mouthFrownLeft": 0.8, "mouthFrownRight": 0.8,
-            "noseSneerLeft": 0.6, "noseSneerRight": 0.6,
+            "browDownLeft": 0.4, "browDownRight": 0.4,
+            "eyeSquintLeft": 0.45, "eyeSquintRight": 0.45,
+            "jawOpen": 0.35, "mouthStretchLeft": 0.5, "mouthStretchRight": 0.5,
+            "mouthFrownLeft": 0.4, "mouthFrownRight": 0.4,
+            "noseSneerLeft": 0.3, "noseSneerRight": 0.3,
         }
         score_distress = _compute_distress_from_blendshapes(distressed)
         assert 0.0 <= score_distress <= 1.0
