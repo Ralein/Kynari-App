@@ -258,3 +258,43 @@ export async function saveAnalysisResult(
         token,
     });
 }
+
+export interface CombinedAnalysisResult {
+    success: boolean;
+    modality?: string;
+    need_label?: string;
+    need_description?: string;
+    confidence?: number;
+    secondary_need?: string;
+    all_needs?: Record<string, number>;
+    fusion_weights?: Record<string, number>;
+    audio_analysis?: Record<string, unknown>;
+    face_analysis?: Record<string, unknown>;
+    spectrogram_b64?: string;
+    error?: string;
+    message?: string;
+}
+
+export async function analyzeCombined(
+    token: string,
+    audioFile: File | Blob,
+    faceResult: {
+        distress_score?: number;
+        distress_intensity?: string;
+        stress_features?: Record<string, number>;
+    }
+): Promise<CombinedAnalysisResult> {
+    const formData = new FormData();
+    formData.append("file", audioFile instanceof File ? audioFile : new File([audioFile], "recording.webm", { type: "audio/webm" }));
+    formData.append("face_distress_score", String(faceResult.distress_score ?? 0));
+    formData.append("face_distress_intensity", faceResult.distress_intensity ?? "mild");
+    formData.append("face_stress_features", JSON.stringify(faceResult.stress_features ?? {}));
+
+    const res = await fetch(`${API_BASE}/api/analyze/combined`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+    });
+
+    return res.json();
+}

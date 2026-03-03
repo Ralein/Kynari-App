@@ -370,6 +370,73 @@ h6 {
   animation: progress-fill 10s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
+/* ── Enhanced overlay: concentric pulse rings ──────────── */
+@keyframes ring-pulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.6;
+  }
+
+  100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+.animate-ring-1 {
+  animation: ring-pulse 2.4s ease-out infinite;
+}
+
+.animate-ring-2 {
+  animation: ring-pulse 2.4s ease-out 0.6s infinite;
+}
+
+.animate-ring-3 {
+  animation: ring-pulse 2.4s ease-out 1.2s infinite;
+}
+
+/* ── Scan beam sweep ───────────────────────────────────── */
+@keyframes scan-beam {
+  0% {
+    top: 10%;
+    opacity: 0;
+  }
+
+  10% {
+    opacity: 1;
+  }
+
+  90% {
+    opacity: 1;
+  }
+
+  100% {
+    top: 85%;
+    opacity: 0;
+  }
+}
+
+.animate-scan-beam {
+  animation: scan-beam 2.5s ease-in-out infinite;
+}
+
+/* ── Magnifying glass lens glow ────────────────────────── */
+@keyframes lens-glow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 8px rgba(168, 85, 247, 0.2);
+  }
+
+  50% {
+    box-shadow: 0 0 24px rgba(168, 85, 247, 0.5), 0 0 48px rgba(168, 85, 247, 0.15);
+  }
+}
+
+.animate-lens-glow {
+  animation: lens-glow 2s ease-in-out infinite;
+}
+
 /* ─── Reduced Motion ─────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {

@@ -7,8 +7,10 @@ import {
     analyzeImage,
     analyzeAudio,
     analyzeVideo,
+    analyzeCombined,
     saveAnalysisResult,
 } from "@/lib/api";
+import type { AnalyzeImageResult } from "@/lib/api";
 import { NEED_EMOJI, NEED_COLORS, NEED_ADVICE, DISTRESS_SCALE, type NeedLabel } from "@kynari/shared";
 import {
     Camera, Mic, Upload, ChevronRight, Save, CheckCircle2,
@@ -51,63 +53,104 @@ function getDistressInfo(level: number) {
 
 // ─── Analysis phase labels for the loading overlay ──────────
 const ANALYSIS_PHASES = [
-    "Detecting face landmarks…",
-    "Running neural network…",
-    "Classifying expression…",
-    "Mapping action units…",
-    "Predicting baby needs…",
+    { label: "Detecting face landmarks…", icon: "🔍" },
+    { label: "Running neural network…", icon: "🧠" },
+    { label: "Classifying expression…", icon: "😶" },
+    { label: "Mapping action units…", icon: "📐" },
+    { label: "Predicting baby needs…", icon: "🎯" },
 ];
 
 function AnalyzingOverlay() {
     const [phaseIndex, setPhaseIndex] = useState(0);
+    const [elapsed, setElapsed] = useState(0);
 
     useEffect(() => {
-        const interval = setInterval(() => {
-            setPhaseIndex((prev) => (prev + 1) % ANALYSIS_PHASES.length);
+        const phaseInterval = setInterval(() => {
+            setPhaseIndex((prev) => Math.min(prev + 1, ANALYSIS_PHASES.length - 1));
         }, 2000);
-        return () => clearInterval(interval);
+        const tick = setInterval(() => setElapsed((t) => t + 1), 1000);
+        return () => {
+            clearInterval(phaseInterval);
+            clearInterval(tick);
+        };
     }, []);
 
+    const progressPct = Math.min(Math.round(((phaseIndex + 1) / ANALYSIS_PHASES.length) * 100), 96);
+
     return (
-        <div className="card-soft p-8 sm:p-10 animate-fade-in">
+        <div className="card-soft p-8 sm:p-10 animate-fade-in overflow-hidden">
             <div className="flex flex-col items-center text-center">
-                {/* Magnifying glass scanning over baby silhouette */}
-                <div className="relative w-40 h-40 mb-6">
-                    {/* Baby face silhouette circle */}
-                    <div className="absolute inset-4 rounded-full bg-gradient-to-br from-primary-100 to-primary-50 border-2 border-primary-200/50" />
-                    {/* Inner features placeholder */}
+
+                {/* ── Animated scanning area ──────────────────── */}
+                <div className="relative w-44 h-44 sm:w-52 sm:h-52 mb-8">
+                    {/* Concentric pulse rings */}
                     <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-5xl opacity-30">👶</span>
+                        <div className="absolute w-28 h-28 rounded-full border-2 border-primary-300/40 animate-ring-1" />
+                        <div className="absolute w-28 h-28 rounded-full border-2 border-primary-300/30 animate-ring-2" />
+                        <div className="absolute w-28 h-28 rounded-full border-2 border-primary-300/20 animate-ring-3" />
                     </div>
+
+                    {/* Baby face silhouette circle */}
+                    <div className="absolute inset-6 sm:inset-8 rounded-full bg-gradient-to-br from-primary-100 via-primary-50 to-white border-2 border-primary-200/60 shadow-inner" />
+
+                    {/* Inner baby emoji */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="text-5xl sm:text-6xl opacity-25 select-none">👶</span>
+                    </div>
+
+                    {/* Horizontal scan beam (sweeps vertically) */}
+                    <div className="absolute inset-x-6 sm:inset-x-8 h-[3px] rounded-full bg-gradient-to-r from-transparent via-primary-500/70 to-transparent animate-scan-beam" />
+
                     {/* Scanning magnifying glass */}
                     <div className="absolute inset-0 flex items-center justify-center animate-magnify-scan">
                         <div className="relative">
-                            <Search className="w-12 h-12 text-primary-600 drop-shadow-lg" strokeWidth={2.5} />
-                            {/* Glow effect behind the glass */}
-                            <div className="absolute inset-0 w-12 h-12 rounded-full bg-primary-400/20 blur-md -z-10" />
+                            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full animate-lens-glow flex items-center justify-center">
+                                <Search className="w-10 h-10 sm:w-12 sm:h-12 text-primary-600 drop-shadow-lg" strokeWidth={2.5} />
+                            </div>
                         </div>
                     </div>
-                    {/* Scanning line effect */}
-                    <div className="absolute inset-x-4 top-1/2 h-[2px] bg-gradient-to-r from-transparent via-primary-400/60 to-transparent animate-pulse-soft" />
                 </div>
 
-                {/* Text */}
-                <h3 className="text-lg font-extrabold text-text-primary mb-1 font-[family-name:var(--font-sans)]">
+                {/* ── Text ───────────────────────────────────── */}
+                <h3 className="text-xl font-extrabold text-text-primary mb-1.5 font-[family-name:var(--font-sans)]">
                     Analyzing…
                 </h3>
-                <p className="text-sm text-primary-500 font-semibold h-5 transition-all duration-300">
-                    {ANALYSIS_PHASES[phaseIndex]}
-                </p>
+                <div className="flex items-center gap-2 h-6 mb-6">
+                    <span className="text-base">{ANALYSIS_PHASES[phaseIndex].icon}</span>
+                    <p className="text-sm text-primary-600 font-semibold transition-all duration-500">
+                        {ANALYSIS_PHASES[phaseIndex].label}
+                    </p>
+                </div>
 
-                {/* Progress bar */}
-                <div className="w-full max-w-xs mt-5">
-                    <div className="h-2 rounded-full bg-primary-100 overflow-hidden">
+                {/* ── Step indicators ────────────────────────── */}
+                <div className="flex items-center gap-1.5 mb-5">
+                    {ANALYSIS_PHASES.map((phase, i) => (
                         <div
-                            key="progress"
-                            className="h-full rounded-full bg-gradient-to-r from-primary-500 to-primary-400 animate-progress-fill"
+                            key={i}
+                            title={phase.label}
+                            className={`h-2 rounded-full transition-all duration-500 ${i <= phaseIndex
+                                    ? "w-6 bg-gradient-to-r from-primary-500 to-primary-400"
+                                    : "w-2 bg-primary-200/60"
+                                }`}
                         />
+                    ))}
+                </div>
+
+                {/* ── Progress bar ───────────────────────────── */}
+                <div className="w-full max-w-xs">
+                    <div className="h-2.5 rounded-full bg-primary-100/80 overflow-hidden shadow-inner">
+                        <div
+                            className="h-full rounded-full bg-gradient-to-r from-primary-600 via-primary-500 to-primary-400 transition-all duration-700 ease-out relative"
+                            style={{ width: `${progressPct}%` }}
+                        >
+                            {/* Shimmer on the progress bar */}
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent animate-pulse-soft" />
+                        </div>
                     </div>
-                    <p className="text-[11px] text-text-muted mt-2">This usually takes a few seconds</p>
+                    <div className="flex justify-between items-center mt-2">
+                        <p className="text-[11px] text-text-muted">This usually takes a few seconds</p>
+                        <p className="text-[11px] font-bold text-primary-500">{progressPct}%</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -124,6 +167,8 @@ export default function AnalyzePage() {
     const [selectedChild, setSelectedChild] = useState<string>("");
     const [saved, setSaved] = useState(false);
     const [feedbackGiven, setFeedbackGiven] = useState(false);
+    const [combinedMode, setCombinedMode] = useState(false);
+    const faceResultRef = useRef<AnalyzeImageResult | null>(null);
 
     useEffect(() => {
         if (children?.length && !selectedChild) {
@@ -246,22 +291,49 @@ export default function AnalyzePage() {
 
                 try {
                     const file = new File([blob], "recording.webm", { type: "audio/webm" });
-                    const res = await analyzeAudio(token, file);
-                    if (res.success) {
-                        setResult({
-                            type: "audio",
-                            need_label: res.need_label,
-                            need_description: res.need_description,
-                            confidence: res.confidence,
-                            secondary_need: res.secondary_need,
-                            all_needs: res.all_needs,
-                            raw: res as unknown as Record<string, unknown>,
+
+                    // If in combined mode and we have a stored face result, use combined endpoint
+                    if (combinedMode && faceResultRef.current) {
+                        const res = await analyzeCombined(token, file, {
+                            distress_score: faceResultRef.current.distress_score,
+                            distress_intensity: faceResultRef.current.distress_intensity,
+                            stress_features: faceResultRef.current.stress_features,
                         });
+                        if (res.success) {
+                            setResult({
+                                type: "video", // "video" type triggers combined display
+                                need_label: res.need_label,
+                                need_description: res.need_description,
+                                confidence: res.confidence,
+                                secondary_need: res.secondary_need,
+                                all_needs: res.all_needs,
+                                fusion_weights: res.fusion_weights,
+                                raw: res as unknown as Record<string, unknown>,
+                            });
+                        } else {
+                            setError(res.message || "Combined analysis failed");
+                        }
+                        setCombinedMode(false);
+                        faceResultRef.current = null;
                     } else {
-                        setError(res.message || "Audio analysis failed");
+                        const res = await analyzeAudio(token, file);
+                        if (res.success) {
+                            setResult({
+                                type: "audio",
+                                need_label: res.need_label,
+                                need_description: res.need_description,
+                                confidence: res.confidence,
+                                secondary_need: res.secondary_need,
+                                all_needs: res.all_needs,
+                                raw: res as unknown as Record<string, unknown>,
+                            });
+                        } else {
+                            setError(res.message || "Audio analysis failed");
+                        }
                     }
                 } catch {
                     setError("Failed to connect to analysis server");
+                    setCombinedMode(false);
                 }
                 setIsAnalyzing(false);
             };
@@ -280,7 +352,7 @@ export default function AnalyzePage() {
         } catch {
             setError("Could not access microphone. Please allow microphone permissions.");
         }
-    }, [token]);
+    }, [token, combinedMode]);
 
     const stopRecording = useCallback(() => {
         if (mediaRecorderRef.current?.state === "recording") {
@@ -507,6 +579,11 @@ export default function AnalyzePage() {
                                 <Mic className={`w-10 h-10 ${isRecording ? "text-red-400" : "text-white/50"}`} />
                             </div>
                             {isRecording && <p className="text-white/80 text-sm mb-2 font-medium">Recording... {recordingTime}s / 10s</p>}
+                            {combinedMode && !isRecording && (
+                                <div className="mb-3 px-4 py-2 rounded-xl bg-indigo-500/20 border border-indigo-400/30">
+                                    <p className="text-indigo-300 text-xs font-semibold">🔗 Combined Mode — face scan captured, now record audio for fused analysis</p>
+                                </div>
+                            )}
                             <p className="text-white/50 text-xs text-center">
                                 {isRecording ? "Recording will auto-stop at 10 seconds" : "Hold your phone near your baby to capture their sounds"}
                             </p>
@@ -729,7 +806,7 @@ export default function AnalyzePage() {
                         </div>
                     )}
 
-                    {/* ── 4. Cross-modality prompt ───────────────────── */}
+                    {/* ── 4. Cross-modality prompt / Fusion weights ───── */}
                     {result.type === "face" && (
                         <div className="card-soft p-5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/40 flex items-center gap-4">
                             <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
@@ -743,6 +820,11 @@ export default function AnalyzePage() {
                             </div>
                             <button
                                 onClick={() => {
+                                    // Store the face result for combined analysis
+                                    if (result.raw) {
+                                        faceResultRef.current = result.raw as unknown as AnalyzeImageResult;
+                                    }
+                                    setCombinedMode(true);
                                     setActiveTab("audio");
                                     setResult(null);
                                     setError(null);
@@ -752,6 +834,27 @@ export default function AnalyzePage() {
                             >
                                 Record Now
                             </button>
+                        </div>
+                    )}
+
+                    {/* Fusion weights badge (shown for combined results) */}
+                    {result.fusion_weights && (
+                        <div className="card-soft p-4 flex items-center gap-3 bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200/40">
+                            <span className="text-lg">🔗</span>
+                            <div className="flex-1">
+                                <p className="text-xs font-bold text-indigo-900 mb-1">Multimodal Fusion</p>
+                                <div className="flex gap-3 text-[11px] font-semibold text-indigo-700">
+                                    {result.fusion_weights.audio > 0 && (
+                                        <span className="px-2 py-0.5 rounded-md bg-indigo-100">🎙️ Audio {Math.round((result.fusion_weights.audio as number) * 100)}%</span>
+                                    )}
+                                    {result.fusion_weights.face > 0 && (
+                                        <span className="px-2 py-0.5 rounded-md bg-purple-100">👶 Face {Math.round((result.fusion_weights.face as number) * 100)}%</span>
+                                    )}
+                                    {result.fusion_weights.context > 0 && (
+                                        <span className="px-2 py-0.5 rounded-md bg-violet-100">📋 Context {Math.round((result.fusion_weights.context as number) * 100)}%</span>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     )}
 
