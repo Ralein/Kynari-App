@@ -15,10 +15,12 @@ logger = logging.getLogger(__name__)
 
 
 SYSTEM_PROMPT = (
-    "You are a warm, empathetic child development assistant. "
-    "You help parents understand their toddler's emotional patterns. "
+    "You are a warm, empathetic baby care assistant. "
+    "You help parents understand their baby's need patterns — "
+    "feeding, sleep, comfort, and diaper schedules. "
     "Speak like a knowledgeable friend, not a clinician. "
-    "Keep responses under 200 words. Never diagnose. Always be encouraging."
+    "Keep responses under 200 words. Never diagnose. Always be encouraging. "
+    "Focus on actionable suggestions about feeding schedules, nap timing, and comfort techniques."
 )
 
 
@@ -49,7 +51,7 @@ class AIReportService:
         # Fetch daily summaries for the week
         summary_data = fetch_all(
             """
-            SELECT * FROM daily_summaries
+            SELECT * FROM need_daily_summaries
             WHERE child_id = %s AND date >= %s AND date <= %s
             ORDER BY date
             """,
@@ -58,9 +60,9 @@ class AIReportService:
 
         if not summary_data:
             narrative = (
-                f"No emotion data was recorded for {child_name} this week. "
-                f"Try placing the phone in the room during play time to start "
-                f"capturing emotional patterns."
+                f"No data was recorded for {child_name} this week. "
+                f"Try recording a few cry samples each day to start "
+                f"capturing your baby's need patterns."
             )
         else:
             narrative = await self._call_claude(
@@ -108,28 +110,27 @@ class AIReportService:
             # Build summary digest
             digest_lines = []
             for s in summaries:
-                dist = s.get("emotion_distribution", {})
+                dist = s.get("need_distribution", {})
                 digest_lines.append(
-                    f"- {s['date']}: dominant={s['dominant_emotion']}, "
+                    f"- {s['date']}: dominant_need={s['dominant_need']}, "
                     f"events={s['total_events']}, "
                     f"distribution={dist}"
                 )
             digest = "\n".join(digest_lines)
 
-            # Notable patterns
-            dominant_emotions = [s["dominant_emotion"] for s in summaries]
+            dominant_needs = [s["dominant_need"] for s in summaries]
             insights = [s.get("insight_text", "") for s in summaries if s.get("insight_text")]
 
             prompt_template = ChatPromptTemplate.from_messages([
                 SystemMessage(content=SYSTEM_PROMPT),
-                ("user", "Here is {child_name}'s emotional data for the week of {week_start}:\n\n"
+                ("user", "Here is {child_name}'s need data for the week of {week_start}:\n\n"
                  "Daily summaries:\n{digest}\n\n"
                  "Notable insights: {insights}\n\n"
-                 "Dominant emotions this week: {dominant_emotions}\n\n"
+                 "Dominant needs this week: {dominant_needs}\n\n"
                  "Write a warm weekly narrative for the parent. Include:\n"
-                 "1. What kind of week it was emotionally (1 sentence)\n"
-                 "2. The most notable pattern or moment (1-2 sentences)\n"
-                 "3. One gentle, actionable suggestion (1 sentence)\n"
+                 "1. What kind of week it was for the baby's needs (1 sentence)\n"
+                 "2. The most notable pattern — feeding, sleep, or comfort (1-2 sentences)\n"
+                 "3. One gentle, actionable suggestion for next week (1 sentence)\n"
                  "Keep it under 200 words."),
             ])
 
@@ -140,7 +141,7 @@ class AIReportService:
                 "week_start": week_start.isoformat(),
                 "digest": digest,
                 "insights": "; ".join(insights) if insights else "None",
-                "dominant_emotions": ", ".join(dominant_emotions),
+                "dominant_needs": ", ".join(dominant_needs),
             })
 
             return response.content
@@ -154,18 +155,27 @@ class AIReportService:
         if not summaries:
             return f"No data recorded for {child_name} this week."
 
-        dominant_emotions = [s["dominant_emotion"] for s in summaries]
+        dominant_needs = [s["dominant_need"] for s in summaries]
         from collections import Counter
 
-        most_common = Counter(dominant_emotions).most_common(1)[0][0]
+        most_common = Counter(dominant_needs).most_common(1)[0][0]
         total_events = sum(s.get("total_events", 0) for s in summaries)
         days_with_data = len(summaries)
 
+        need_desc = {
+            "hungry": "hungry",
+            "diaper": "needing diaper changes",
+            "sleepy": "sleepy",
+            "pain": "uncomfortable",
+            "calm": "calm and content",
+        }
+        desc = need_desc.get(most_common, most_common)
+
         return (
-            f"{child_name} had a mostly {most_common} week with "
-            f"{total_events} emotion events across {days_with_data} days. "
-            f"Keep up the great monitoring — every day of data helps "
-            f"Kynari learn your child's unique emotional patterns."
+            f"{child_name} was mostly {desc} this week with "
+            f"{total_events} detected events across {days_with_data} days. "
+            f"Keep recording — every day of data helps "
+            f"Kynari learn your baby's unique patterns."
         )
 
     async def get_weekly_report(

@@ -1,11 +1,11 @@
-"""Kynari API — Privacy-first emotion detection backend."""
+"""Kynari API — Privacy-first baby need detection backend."""
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import get_settings
-from routers import children, events, summaries, analyze
+from routers import children, events, summaries, analyze, feedback, context
 from middleware.rate_limit import RateLimitMiddleware
 from middleware.audit import AuditLogMiddleware
 
@@ -26,7 +26,12 @@ settings = get_settings()
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="Privacy-first AI emotion detection API for toddlers. Raw audio never leaves the device.",
+    description=(
+        "Privacy-first AI baby need detection API. "
+        "Analyzes cry audio, facial distress, and contextual metadata "
+        "to predict baby needs (hungry, diaper, sleepy, pain, calm). "
+        "Raw audio never leaves the device."
+    ),
     lifespan=lifespan,
 )
 
@@ -65,6 +70,8 @@ app.include_router(children.router)
 app.include_router(events.router)
 app.include_router(summaries.router)
 app.include_router(analyze.router)
+app.include_router(feedback.router)
+app.include_router(context.router)
 
 
 # ─── Health Check ────────────────────────────────────────────
