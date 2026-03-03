@@ -33,7 +33,7 @@ export default function DashboardPage() {
                         className="btn-primary"
                     >
                         <Search className="w-4 h-4" />
-                        Analyze Baby Emotion
+                        Analyze Baby Needs
                     </Link>
                 </div>
             </div>

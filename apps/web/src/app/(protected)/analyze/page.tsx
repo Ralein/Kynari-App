@@ -9,27 +9,42 @@ import {
     analyzeVideo,
     saveAnalysisResult,
 } from "@/lib/api";
-import { NEED_EMOJI, type NeedLabel } from "@kynari/shared";
-import { Camera, Mic, Upload, ChevronRight, Save, CheckCircle2, AlertCircle } from "lucide-react";
+import { NEED_EMOJI, NEED_COLORS, NEED_ADVICE, DISTRESS_SCALE, type NeedLabel } from "@kynari/shared";
+import {
+    Camera, Mic, Upload, ChevronRight, Save, CheckCircle2,
+    AlertCircle, Stethoscope, Lightbulb, Volume2, ThumbsUp, ThumbsDown
+} from "lucide-react";
 
 type Tab = "camera" | "audio" | "upload";
 
 type AnalysisResult = {
     type: "face" | "audio" | "video";
-    // Need detection fields (audio / video / combined)
     need_label?: string;
     need_description?: string;
     confidence?: number;
     secondary_need?: string;
     all_needs?: Record<string, number>;
-    // Face distress fields (image only)
     distress_score?: number;
     distress_intensity?: string;
     stress_features?: Record<string, number>;
-    // Fusion metadata
     fusion_weights?: Record<string, number>;
     raw?: Record<string, unknown>;
 };
+
+// ─── Helper: Severity from confidence/distress ──────────────
+function getSeverity(score: number): "low" | "medium" | "high" {
+    if (score < 0.35) return "low";
+    if (score < 0.65) return "medium";
+    return "high";
+}
+
+function getDistressLevel(score: number): number {
+    return Math.round(score * 10);
+}
+
+function getDistressInfo(level: number) {
+    return DISTRESS_SCALE.find(s => level >= s.min && level <= s.max) || DISTRESS_SCALE[0];
+}
 
 export default function AnalyzePage() {
     const token = useToken();
@@ -40,6 +55,7 @@ export default function AnalyzePage() {
     const [error, setError] = useState<string | null>(null);
     const [selectedChild, setSelectedChild] = useState<string>("");
     const [saved, setSaved] = useState(false);
+    const [feedbackGiven, setFeedbackGiven] = useState(false);
 
     useEffect(() => {
         if (children?.length && !selectedChild) {
@@ -87,6 +103,7 @@ export default function AnalyzePage() {
         setResult(null);
         setError(null);
         setSaved(false);
+        setFeedbackGiven(false);
 
         const canvas = canvasRef.current;
         const video = videoRef.current;
@@ -150,6 +167,7 @@ export default function AnalyzePage() {
                 setResult(null);
                 setError(null);
                 setSaved(false);
+                setFeedbackGiven(false);
 
                 try {
                     const file = new File([blob], "recording.webm", { type: "audio/webm" });
@@ -207,6 +225,7 @@ export default function AnalyzePage() {
             setResult(null);
             setError(null);
             setSaved(false);
+            setFeedbackGiven(false);
 
             try {
                 if (file.type.startsWith("image/")) {
@@ -267,8 +286,6 @@ export default function AnalyzePage() {
     // ─── Save result ─────────────────────────────────────────
     const handleSave = useCallback(async () => {
         if (!result || !token || !selectedChild) return;
-
-        // Face-only results don't have need_label, so derive one
         const needLabel = result.need_label || (
             result.distress_score !== undefined
                 ? (result.distress_score > 0.5 ? "pain" : "calm")
@@ -300,20 +317,14 @@ export default function AnalyzePage() {
         };
     }, [stopCamera]);
 
-    // ─── Helper: display label for results ───────────────────
-    const displayLabel = result?.need_label || (
-        result?.distress_intensity
-            ? `${result.distress_intensity} distress`
-            : undefined
-    );
-
-    const displayEmoji = result?.need_label
-        ? NEED_EMOJI[result.need_label as NeedLabel] || "🔍"
-        : result?.distress_score !== undefined
-            ? (result.distress_score > 0.6 ? "😰" : result.distress_score > 0.3 ? "😟" : "😌")
-            : "🔍";
-
-    const displayConfidence = result?.confidence ?? result?.distress_score;
+    // ─── Computed display values ─────────────────────────────
+    const primaryScore = result?.confidence ?? result?.distress_score ?? 0;
+    const severity = getSeverity(primaryScore);
+    const distressLevel = getDistressLevel(result?.distress_score ?? primaryScore);
+    const distressInfo = getDistressInfo(distressLevel);
+    const needKey = (result?.need_label || (result?.distress_score !== undefined
+        ? (result.distress_score > 0.5 ? "pain" : "calm") : "calm")) as NeedLabel;
+    const advice = NEED_ADVICE[needKey];
 
     return (
         <div className="animate-fade-in space-y-5">
@@ -332,7 +343,7 @@ export default function AnalyzePage() {
                     Analyze Baby Needs
                 </h1>
                 <p className="text-text-secondary text-sm mt-1">
-                    Scan your baby&apos;s face, record their sounds, or upload a file to understand their needs
+                    Scan your baby&apos;s face, record their sounds, or upload a file to understand what they need
                 </p>
             </div>
 
@@ -363,6 +374,7 @@ export default function AnalyzePage() {
                             setResult(null);
                             setError(null);
                             setSaved(false);
+                            setFeedbackGiven(false);
                         }}
                         className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${activeTab === tab.key
                             ? "bg-white shadow-sm text-primary-700 shadow-primary-500/5"
@@ -381,13 +393,7 @@ export default function AnalyzePage() {
                 {activeTab === "camera" && (
                     <div className="space-y-4">
                         <div className="relative bg-gray-900 rounded-2xl overflow-hidden aspect-video max-w-xl mx-auto">
-                            <video
-                                ref={videoRef}
-                                autoPlay
-                                playsInline
-                                muted
-                                className={`w-full h-full object-cover ${cameraActive ? "block" : "hidden"}`}
-                            />
+                            <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${cameraActive ? "block" : "hidden"}`} />
                             <canvas ref={canvasRef} className="hidden" />
                             {!cameraActive && (
                                 <div className="absolute inset-0 flex flex-col items-center justify-center text-white/60">
@@ -398,25 +404,13 @@ export default function AnalyzePage() {
                         </div>
                         <div className="flex justify-center gap-3">
                             {!cameraActive ? (
-                                <button onClick={startCamera} className="btn-primary">
-                                    <Camera className="w-4 h-4" />
-                                    Start Camera
-                                </button>
+                                <button onClick={startCamera} className="btn-primary"><Camera className="w-4 h-4" /> Start Camera</button>
                             ) : (
                                 <>
-                                    <button
-                                        onClick={captureAndAnalyze}
-                                        disabled={isAnalyzing}
-                                        className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
+                                    <button onClick={captureAndAnalyze} disabled={isAnalyzing} className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed">
                                         {isAnalyzing ? "Analyzing..." : "Capture & Analyze"}
                                     </button>
-                                    <button
-                                        onClick={stopCamera}
-                                        className="btn-secondary"
-                                    >
-                                        Stop Camera
-                                    </button>
+                                    <button onClick={stopCamera} className="btn-secondary">Stop Camera</button>
                                 </>
                             )}
                         </div>
@@ -427,40 +421,21 @@ export default function AnalyzePage() {
                 {activeTab === "audio" && (
                     <div className="space-y-4">
                         <div className="bg-gray-900 rounded-2xl p-8 max-w-xl mx-auto flex flex-col items-center">
-                            <div
-                                className={`w-24 h-24 rounded-full flex items-center justify-center mb-4 transition-all ${isRecording
-                                    ? "bg-red-500/20 animate-pulse"
-                                    : "bg-white/10"
-                                    }`}
-                            >
+                            <div className={`w-24 h-24 rounded-full flex items-center justify-center mb-4 transition-all ${isRecording ? "bg-red-500/20 animate-pulse" : "bg-white/10"}`}>
                                 <Mic className={`w-10 h-10 ${isRecording ? "text-red-400" : "text-white/50"}`} />
                             </div>
-                            {isRecording && (
-                                <p className="text-white/80 text-sm mb-2 font-medium">
-                                    Recording... {recordingTime}s / 10s
-                                </p>
-                            )}
+                            {isRecording && <p className="text-white/80 text-sm mb-2 font-medium">Recording... {recordingTime}s / 10s</p>}
                             <p className="text-white/50 text-xs text-center">
-                                {isRecording
-                                    ? "Recording will auto-stop at 10 seconds"
-                                    : "Hold your phone near your baby to capture their sounds"}
+                                {isRecording ? "Recording will auto-stop at 10 seconds" : "Hold your phone near your baby to capture their sounds"}
                             </p>
                         </div>
                         <div className="flex justify-center">
                             {!isRecording ? (
-                                <button
-                                    onClick={startRecording}
-                                    disabled={isAnalyzing}
-                                    className="btn-primary disabled:opacity-50"
-                                >
-                                    <Mic className="w-4 h-4" />
-                                    {isAnalyzing ? "Analyzing..." : "Start Recording"}
+                                <button onClick={startRecording} disabled={isAnalyzing} className="btn-primary disabled:opacity-50">
+                                    <Mic className="w-4 h-4" /> {isAnalyzing ? "Analyzing..." : "Start Recording"}
                                 </button>
                             ) : (
-                                <button
-                                    onClick={stopRecording}
-                                    className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-red-500 text-white font-bold text-sm hover:bg-red-600 transition-colors"
-                                >
+                                <button onClick={stopRecording} className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-red-500 text-white font-bold text-sm hover:bg-red-600 transition-colors">
                                     Stop Recording
                                 </button>
                             )}
@@ -472,38 +447,17 @@ export default function AnalyzePage() {
                 {activeTab === "upload" && (
                     <div className="space-y-4">
                         <div
-                            className={`border-2 border-dashed rounded-2xl p-12 text-center transition-colors max-w-xl mx-auto cursor-pointer ${dragOver
-                                ? "border-primary-500 bg-primary-50/50"
-                                : "border-primary-200 hover:border-primary-400"
-                                }`}
+                            className={`border-2 border-dashed rounded-2xl p-12 text-center transition-colors max-w-xl mx-auto cursor-pointer ${dragOver ? "border-primary-500 bg-primary-50/50" : "border-primary-200 hover:border-primary-400"}`}
                             onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                             onDragLeave={() => setDragOver(false)}
-                            onDrop={(e) => {
-                                e.preventDefault();
-                                setDragOver(false);
-                                const file = e.dataTransfer.files[0];
-                                if (file) handleFile(file);
-                            }}
+                            onDrop={(e) => { e.preventDefault(); setDragOver(false); const file = e.dataTransfer.files[0]; if (file) handleFile(file); }}
                             onClick={() => fileInputRef.current?.click()}
                         >
                             <Upload className="w-10 h-10 text-primary-300 mx-auto mb-3" />
-                            <p className="text-text-secondary text-sm font-medium">
-                                {isAnalyzing ? "Analyzing..." : "Drag & drop or click to upload"}
-                            </p>
-                            <p className="text-text-muted text-xs mt-1">
-                                Images (JPG, PNG) · Audio (WAV, MP3) · Video (MP4, WebM)
-                            </p>
+                            <p className="text-text-secondary text-sm font-medium">{isAnalyzing ? "Analyzing..." : "Drag & drop or click to upload"}</p>
+                            <p className="text-text-muted text-xs mt-1">Images (JPG, PNG) · Audio (WAV, MP3) · Video (MP4, WebM)</p>
                         </div>
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept="image/*,audio/*,video/*"
-                            className="hidden"
-                            onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) handleFile(file);
-                            }}
-                        />
+                        <input ref={fileInputRef} type="file" accept="image/*,audio/*,video/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (file) handleFile(file); }} />
                     </div>
                 )}
             </div>
@@ -516,145 +470,235 @@ export default function AnalyzePage() {
                 </div>
             )}
 
-            {/* Results Display */}
+            {/* ═══════════════════════════════════════════════════════
+                RESULTS SECTION — ChatterBaby-inspired
+               ═══════════════════════════════════════════════════════ */}
             {result && (
-                <div className="card-soft p-6 sm:p-8 animate-slide-up">
-                    <h3 className="text-lg font-bold mb-4 font-[family-name:var(--font-sans)]">
-                        Analysis Result
-                    </h3>
+                <div className="space-y-4 animate-slide-up">
 
-                    {/* Main result */}
-                    <div className="flex items-center gap-4 mb-6">
-                        <div className="w-16 h-16 rounded-2xl bg-primary-50 flex items-center justify-center">
-                            <span className="text-4xl">{displayEmoji}</span>
+                    {/* ── 1. Distress Severity Scale ─────────────────── */}
+                    <div className="card-soft p-6 sm:p-8">
+                        <div className="flex items-center gap-2 mb-5">
+                            <Stethoscope className="w-5 h-5 text-primary-600" />
+                            <h3 className="text-lg font-bold font-[family-name:var(--font-sans)]">
+                                {result.type === "face" ? "Distress Assessment" : "Analysis Results"}
+                            </h3>
                         </div>
-                        <div>
-                            <div className="flex items-center gap-2 mb-1">
-                                <span className="px-3 py-1 rounded-full text-sm font-bold capitalize bg-primary-100 text-primary-800">
-                                    {displayLabel || "analyzing"}
-                                </span>
-                                {result.secondary_need && (
-                                    <span className="px-2 py-0.5 rounded-full text-xs font-medium capitalize bg-amber-50 text-amber-700 border border-amber-200">
-                                        also: {result.secondary_need}
-                                    </span>
-                                )}
-                                <span className="text-xs text-text-muted">
-                                    via {result.type === "face" ? "facial expression" : result.type === "audio" ? "cry analysis" : "combined"}
-                                </span>
+
+                        {/* Distress gauge */}
+                        <div className="mb-6">
+                            <div className="flex items-center gap-4 mb-3">
+                                <span className="text-5xl">{distressInfo.emoji}</span>
+                                <div>
+                                    <p className="text-2xl font-extrabold" style={{ color: distressInfo.color }}>
+                                        {distressLevel}/10
+                                    </p>
+                                    <p className="text-sm font-semibold text-text-secondary">{distressInfo.label} distress</p>
+                                </div>
                             </div>
-                            {result.need_description && (
-                                <p className="text-sm text-text-secondary">{result.need_description}</p>
-                            )}
+
+                            {/* Gradient scale bar */}
+                            <div className="relative mt-4">
+                                <div className="h-4 rounded-full overflow-hidden" style={{
+                                    background: "linear-gradient(to right, #22C55E, #84CC16, #EAB308, #F97316, #EF4444)"
+                                }}>
+                                    <div
+                                        className="absolute top-0 w-5 h-5 rounded-full bg-white border-3 border-gray-800 shadow-lg -translate-x-1/2 -translate-y-[2px]"
+                                        style={{ left: `${Math.min(distressLevel * 10, 100)}%`, borderWidth: "3px" }}
+                                    />
+                                </div>
+                                <div className="flex justify-between mt-1.5 text-[10px] text-text-muted font-medium">
+                                    <span>No pain</span>
+                                    <span>Mild</span>
+                                    <span>Moderate</span>
+                                    <span>Severe</span>
+                                    <span>Worst</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Baby face scale */}
+                        <div className="flex justify-between px-2 mb-2">
+                            {DISTRESS_SCALE.map((s, i) => (
+                                <div key={i} className={`flex flex-col items-center gap-1 transition-all ${distressLevel >= s.min && distressLevel <= s.max ? "scale-125" : "opacity-50"}`}>
+                                    <span className="text-2xl">{s.emoji}</span>
+                                    <span className="text-[10px] font-semibold" style={{ color: s.color }}>{s.min === s.max ? s.min : `${s.min}-${s.max}`}</span>
+                                </div>
+                            ))}
                         </div>
                     </div>
 
-                    {/* Confidence / Distress bar */}
-                    {displayConfidence !== undefined && (
-                        <div className="mb-6">
-                            <div className="flex justify-between text-xs text-text-muted mb-1.5">
-                                <span className="font-medium">
-                                    {result.type === "face" ? "Distress Level" : "Confidence"}
-                                </span>
-                                <span className="font-semibold">{(displayConfidence * 100).toFixed(1)}%</span>
-                            </div>
-                            <div className="w-full h-3 bg-primary-50 rounded-full overflow-hidden">
-                                <div
-                                    className="h-full bg-gradient-to-r from-primary-400 to-primary-600 rounded-full transition-all duration-700"
-                                    style={{ width: `${displayConfidence * 100}%` }}
-                                />
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Face stress features */}
-                    {result.stress_features && (
-                        <div className="mb-6 space-y-2">
-                            <p className="text-xs text-text-muted font-semibold">Stress Features</p>
-                            {Object.entries(result.stress_features)
-                                .sort(([, a], [, b]) => b - a)
-                                .map(([label, score]) => (
-                                    <div key={label} className="flex items-center gap-2">
-                                        <span className="w-28 text-xs text-text-secondary capitalize">
-                                            {label.replace(/_/g, " ")}
-                                        </span>
-                                        <div className="flex-1 h-2 bg-primary-50 rounded-full overflow-hidden">
-                                            <div
-                                                className="h-full bg-primary-300/60 rounded-full"
-                                                style={{ width: `${score * 100}%` }}
-                                            />
-                                        </div>
-                                        <span className="text-xs text-text-muted w-12 text-right font-medium">
-                                            {(score * 100).toFixed(1)}%
-                                        </span>
-                                    </div>
-                                ))}
-                        </div>
-                    )}
-
-                    {/* All needs breakdown */}
+                    {/* ── 2. Need Probabilities (ChatterBaby bars) ───── */}
                     {result.all_needs && (
-                        <div className="mb-6 space-y-2">
-                            <p className="text-xs text-text-muted font-semibold">Need Breakdown</p>
-                            {Object.entries(result.all_needs)
-                                .sort(([, a], [, b]) => b - a)
-                                .map(([label, score]) => (
-                                    <div key={label} className="flex items-center gap-2">
-                                        <span className="w-20 text-xs text-text-secondary capitalize flex items-center gap-1">
-                                            <span>{NEED_EMOJI[label as NeedLabel] || ""}</span>
-                                            {label}
-                                        </span>
-                                        <div className="flex-1 h-2 bg-primary-50 rounded-full overflow-hidden">
-                                            <div
-                                                className="h-full bg-primary-300/60 rounded-full"
-                                                style={{ width: `${score * 100}%` }}
-                                            />
-                                        </div>
-                                        <span className="text-xs text-text-muted w-12 text-right font-medium">
-                                            {(score * 100).toFixed(1)}%
-                                        </span>
-                                    </div>
-                                ))}
-                        </div>
-                    )}
-
-                    {/* Fusion weights (for combined results) */}
-                    {result.fusion_weights && (
-                        <div className="mb-6">
-                            <p className="text-xs text-text-muted font-semibold mb-2">Signal Weights</p>
-                            <div className="flex gap-2">
-                                {Object.entries(result.fusion_weights)
-                                    .filter(([, v]) => v > 0)
-                                    .map(([key, value]) => (
-                                        <span key={key} className="px-2.5 py-1 rounded-lg text-xs font-medium bg-primary-50 text-primary-700">
-                                            {key}: {(value * 100).toFixed(0)}%
-                                        </span>
-                                    ))}
+                        <div className="card-soft p-6 sm:p-8">
+                            <p className="text-sm font-bold text-text-primary mb-4 font-[family-name:var(--font-sans)]">
+                                Cry Analysis
+                            </p>
+                            <div className="space-y-3">
+                                {Object.entries(result.all_needs)
+                                    .sort(([, a], [, b]) => b - a)
+                                    .map(([label, score]) => {
+                                        const pct = Math.round(score * 100);
+                                        const color = NEED_COLORS[label as NeedLabel] || "#9CA3AF";
+                                        const emoji = NEED_EMOJI[label as NeedLabel] || "";
+                                        const isTop = label === result.need_label;
+                                        return (
+                                            <div key={label} className={`flex items-center gap-3 ${isTop ? "" : "opacity-75"}`}>
+                                                <span className="w-20 text-sm font-semibold text-text-primary capitalize flex items-center gap-1.5">
+                                                    {emoji} {label}
+                                                </span>
+                                                <div className="flex-1 h-8 bg-gray-100 rounded-lg overflow-hidden relative">
+                                                    <div
+                                                        className="h-full rounded-lg flex items-center transition-all duration-700"
+                                                        style={{ width: `${Math.max(pct, 4)}%`, backgroundColor: color }}
+                                                    >
+                                                        <span className="text-white text-xs font-bold ml-2 whitespace-nowrap drop-shadow-sm">
+                                                            {pct}%
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                             </div>
                         </div>
                     )}
 
-                    {/* Save to timeline */}
-                    <div className="flex items-center gap-3 pt-4 border-t border-primary-100/50">
-                        {!saved ? (
+                    {/* ── 2b. Face stress features (for face-only) ──── */}
+                    {result.stress_features && !result.all_needs && (
+                        <div className="card-soft p-6 sm:p-8">
+                            <p className="text-sm font-bold text-text-primary mb-4 font-[family-name:var(--font-sans)]">
+                                Facial Stress Indicators
+                            </p>
+                            <div className="space-y-3">
+                                {Object.entries(result.stress_features)
+                                    .sort(([, a], [, b]) => b - a)
+                                    .map(([label, score]) => {
+                                        const pct = Math.round(score * 100);
+                                        return (
+                                            <div key={label} className="flex items-center gap-3">
+                                                <span className="w-32 text-sm font-semibold text-text-primary capitalize">
+                                                    {label.replace(/_/g, " ")}
+                                                </span>
+                                                <div className="flex-1 h-7 bg-gray-100 rounded-lg overflow-hidden">
+                                                    <div
+                                                        className="h-full rounded-lg flex items-center transition-all duration-700"
+                                                        style={{ width: `${Math.max(pct, 4)}%`, backgroundColor: pct > 60 ? "#F97316" : pct > 30 ? "#EAB308" : "#22C55E" }}
+                                                    >
+                                                        <span className="text-white text-xs font-bold ml-2 drop-shadow-sm">{pct}%</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── 3. Actionable Advice Card ──────────────────── */}
+                    {advice && (
+                        <div className="card-soft p-6 sm:p-8 border-l-4" style={{ borderLeftColor: distressInfo.color }}>
+                            <div className="flex items-start gap-3">
+                                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${distressInfo.color}15` }}>
+                                    <Lightbulb className="w-5 h-5" style={{ color: distressInfo.color }} />
+                                </div>
+                                <div>
+                                    <p className="font-bold text-text-primary mb-1 font-[family-name:var(--font-sans)]">
+                                        {advice.icon} {advice.title}
+                                    </p>
+                                    <p className="text-sm text-text-secondary leading-relaxed">
+                                        {advice[severity]}
+                                    </p>
+                                    {result.secondary_need && (
+                                        <p className="text-xs text-text-muted mt-2 flex items-center gap-1.5">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                            Also consider: <span className="font-semibold capitalize">{result.secondary_need}</span> — {NEED_ADVICE[result.secondary_need as NeedLabel]?.low || ""}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── 4. Cross-modality prompt ───────────────────── */}
+                    {result.type === "face" && (
+                        <div className="card-soft p-5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/40 flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
+                                <Volume2 className="w-5 h-5 text-blue-600" />
+                            </div>
+                            <div className="flex-1">
+                                <p className="text-sm font-bold text-blue-900 mb-0.5">Want more accurate results?</p>
+                                <p className="text-xs text-blue-700">
+                                    Record your baby&apos;s voice for cry analysis — it gives a much more accurate need prediction.
+                                </p>
+                            </div>
                             <button
-                                onClick={handleSave}
-                                disabled={!selectedChild}
-                                className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                                onClick={() => {
+                                    setActiveTab("audio");
+                                    setResult(null);
+                                    setError(null);
+                                    setSaved(false);
+                                }}
+                                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors shrink-0"
                             >
-                                <Save className="w-4 h-4" />
-                                Save to Timeline
+                                Record Now
                             </button>
-                        ) : (
-                            <div className="flex items-center gap-2 text-primary-700">
-                                <CheckCircle2 className="w-4 h-4" />
-                                <span className="text-sm font-semibold">Saved to timeline!</span>
+                        </div>
+                    )}
+
+                    {/* ── 5. Feedback + Save ─────────────────────────── */}
+                    <div className="card-soft p-6 sm:p-8">
+                        {/* Were we right? */}
+                        {!feedbackGiven && (
+                            <div className="mb-5 pb-5 border-b border-primary-100/50">
+                                <p className="text-sm font-bold text-text-primary mb-3 text-center font-[family-name:var(--font-sans)]">
+                                    Were we right?
+                                </p>
+                                <div className="flex justify-center gap-3">
+                                    <button
+                                        onClick={() => setFeedbackGiven(true)}
+                                        className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 transition-colors"
+                                    >
+                                        <ThumbsUp className="w-4 h-4" /> Yes!
+                                    </button>
+                                    <button
+                                        onClick={() => setFeedbackGiven(true)}
+                                        className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200 transition-colors"
+                                    >
+                                        <ThumbsDown className="w-4 h-4" /> Not quite
+                                    </button>
+                                </div>
                             </div>
                         )}
-                        {!saved && selectedChild && (
-                            <span className="text-xs text-text-muted">
-                                Saving for {children?.find((c) => c.id === selectedChild)?.name}
-                            </span>
+                        {feedbackGiven && (
+                            <div className="mb-5 pb-5 border-b border-primary-100/50 text-center">
+                                <p className="text-sm text-text-muted">Thanks for the feedback! This helps Kynari learn. 💜</p>
+                            </div>
                         )}
+
+                        {/* Save to timeline */}
+                        <div className="flex items-center gap-3">
+                            {!saved ? (
+                                <button
+                                    onClick={handleSave}
+                                    disabled={!selectedChild}
+                                    className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <Save className="w-4 h-4" />
+                                    Save to Timeline
+                                </button>
+                            ) : (
+                                <div className="flex items-center gap-2 text-primary-700">
+                                    <CheckCircle2 className="w-4 h-4" />
+                                    <span className="text-sm font-semibold">Saved to timeline!</span>
+                                </div>
+                            )}
+                            {!saved && selectedChild && (
+                                <span className="text-xs text-text-muted">
+                                    Saving for {children?.find((c) => c.id === selectedChild)?.name}
+                                </span>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}

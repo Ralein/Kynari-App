@@ -2,7 +2,7 @@ import { currentUser } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
-import { Heart, LayoutDashboard, Search, Sparkles } from "lucide-react";
+import { Heart, LayoutDashboard, Search } from "lucide-react";
 
 export default async function ProtectedLayout({
     children,
@@ -47,13 +47,6 @@ export default async function ProtectedLayout({
                             <Search className="w-4 h-4" />
                             Analyze
                         </Link>
-                        <Link
-                            href="/upgrade"
-                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-text-secondary hover:text-primary-700 hover:bg-primary-50 transition-colors"
-                        >
-                            <Sparkles className="w-4 h-4" />
-                            Upgrade
-                        </Link>
                     </div>
 
                     <div className="flex items-center gap-3">
@@ -93,13 +86,6 @@ export default async function ProtectedLayout({
                     >
                         <Search className="w-5 h-5" />
                         <span className="text-[10px] font-medium">Analyze</span>
-                    </Link>
-                    <Link
-                        href="/upgrade"
-                        className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-text-muted hover:text-primary-600 transition-colors"
-                    >
-                        <Sparkles className="w-5 h-5" />
-                        <span className="text-[10px] font-medium">Pro</span>
                     </Link>
                 </div>
             </nav>

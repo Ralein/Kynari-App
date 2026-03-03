@@ -53,6 +53,16 @@ export async function createChild(
     });
 }
 
+export async function deleteChild(
+    token: string,
+    childId: string
+): Promise<{ deleted: boolean }> {
+    return apiFetch<{ deleted: boolean }>(`/children/${childId}`, {
+        method: "DELETE",
+        token,
+    });
+}
+
 // ─── Summaries API ──────────────────────────────────────────
 
 import type { DailySummary, BaselineStatus } from "@kynari/shared";
