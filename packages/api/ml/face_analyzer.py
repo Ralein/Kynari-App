@@ -116,41 +116,56 @@ def _load_expression_classifier():
     return _expression_classifier
 
 
-# ─── Blendshape groups (NFCS-mapped) ─────────────────────
+# ─── Blendshape groups by facial region (NFCS-mapped) ────
+#
+# Grouped by region so we can take the top activations per group
+# instead of averaging across all blendshapes (which dilutes the signal).
+# MediaPipe blendshape values typically range 0.05–0.50 for real photos
+# (rarely exceed 0.6), so thresholds and weights are tuned accordingly.
 
-# These blendshape names correspond to facial action units
-# predicted by MediaPipe's neural network
-DISTRESS_BLENDSHAPES = {
-    # Brow tension (NFCS: brow bulge)
-    "browDownLeft": 1.0,
-    "browDownRight": 1.0,
-    "browInnerUp": 0.6,       # Inner brow raise (worry/pain)
-
-    # Eye squeeze (NFCS: eye squeeze)
-    "eyeSquintLeft": 0.9,
-    "eyeSquintRight": 0.9,
-    "eyeBlinkLeft": 0.4,       # Tightly shut eyes
-    "eyeBlinkRight": 0.4,
-
-    # Mouth/cry (NFCS: open mouth, stretch mouth)
-    "jawOpen": 0.8,
-    "mouthStretchLeft": 1.0,   # Cry-stretch
-    "mouthStretchRight": 1.0,
-    "mouthFrownLeft": 0.9,     # Lip corner depression
-    "mouthFrownRight": 0.9,
-    "mouthPucker": 0.5,        # Pre-cry pucker
-
-    # Nose/cheek (NFCS: nasolabial furrow, cheek raise)
-    "noseSneerLeft": 0.7,
-    "noseSneerRight": 0.7,
-    "cheekSquintLeft": 0.6,
-    "cheekSquintRight": 0.6,
-
-    # Tongue (discomfort signal)
-    "tongueOut": 0.5,
+DISTRESS_GROUPS = {
+    "brow": {
+        # NFCS: brow bulge
+        "browDownLeft": 1.0,
+        "browDownRight": 1.0,
+        "browInnerUp": 0.8,       # Inner brow raise (worry/pain)
+    },
+    "eyes": {
+        # NFCS: eye squeeze
+        "eyeSquintLeft": 1.0,
+        "eyeSquintRight": 1.0,
+        "eyeBlinkLeft": 0.5,      # Tightly shut eyes
+        "eyeBlinkRight": 0.5,
+    },
+    "mouth": {
+        # NFCS: open mouth, stretch mouth — most important for cry detection
+        "jawOpen": 0.8,
+        "mouthStretchLeft": 1.0,
+        "mouthStretchRight": 1.0,
+        "mouthFrownLeft": 1.0,
+        "mouthFrownRight": 1.0,
+        "mouthPucker": 0.5,
+    },
+    "nose_cheek": {
+        # NFCS: nasolabial furrow, cheek raise
+        "noseSneerLeft": 0.8,
+        "noseSneerRight": 0.8,
+        "cheekSquintLeft": 0.6,
+        "cheekSquintRight": 0.6,
+        "tongueOut": 0.5,
+    },
 }
 
-# Calm/content blendshapes (reduce distress)
+# How much each region contributes to overall distress
+# Mouth is the strongest distress indicator in infants
+GROUP_WEIGHTS = {
+    "brow": 0.25,
+    "eyes": 0.25,
+    "mouth": 0.35,
+    "nose_cheek": 0.15,
+}
+
+# Calm/content blendshapes (dampen distress)
 CALM_BLENDSHAPES = {
     "mouthSmileLeft": 1.0,
     "mouthSmileRight": 1.0,
@@ -159,17 +174,18 @@ CALM_BLENDSHAPES = {
 }
 
 # ─── Need pattern signatures ─────────────────────────────
-# Each need has a signature of blendshape patterns + expression
+# Each need has a signature of blendshape patterns + expression.
+# Thresholds are calibrated for REAL MediaPipe output (0.05–0.50 range).
 
 NEED_PATTERNS = {
     "hungry": {
         "blendshape_signals": {
-            "mouthPucker": 0.5,        # Sucking reflex
-            "jawOpen": 0.4,            # Rooting/opening
-            "mouthStretchLeft": 0.3,
-            "mouthStretchRight": 0.3,
-            "mouthFrownLeft": 0.4,
-            "mouthFrownRight": 0.4,
+            "mouthPucker": 0.15,       # Sucking reflex
+            "jawOpen": 0.12,           # Rooting/opening
+            "mouthStretchLeft": 0.10,
+            "mouthStretchRight": 0.10,
+            "mouthFrownLeft": 0.12,
+            "mouthFrownRight": 0.12,
         },
         "expression_boost": {"sad": 0.4, "angry": 0.3},
         "distress_range": (0.3, 0.8),
@@ -177,28 +193,28 @@ NEED_PATTERNS = {
     },
     "pain": {
         "blendshape_signals": {
-            "eyeSquintLeft": 0.6,      # Eyes squeezed shut
-            "eyeSquintRight": 0.6,
-            "browDownLeft": 0.5,       # Deep brow furrow
-            "browDownRight": 0.5,
-            "browInnerUp": 0.4,        # Brow bulge
-            "noseSneerLeft": 0.5,      # Nasolabial furrow
-            "noseSneerRight": 0.5,
-            "mouthStretchLeft": 0.6,   # Wide cry
-            "mouthStretchRight": 0.6,
-            "jawOpen": 0.5,
+            "eyeSquintLeft": 0.20,     # Eyes squeezed shut
+            "eyeSquintRight": 0.20,
+            "browDownLeft": 0.15,      # Deep brow furrow
+            "browDownRight": 0.15,
+            "browInnerUp": 0.12,       # Brow bulge
+            "noseSneerLeft": 0.15,     # Nasolabial furrow
+            "noseSneerRight": 0.15,
+            "mouthStretchLeft": 0.20,  # Wide cry
+            "mouthStretchRight": 0.20,
+            "jawOpen": 0.15,
         },
         "expression_boost": {"angry": 0.5, "fear": 0.4, "disgust": 0.3},
-        "distress_range": (0.6, 1.0),
+        "distress_range": (0.5, 1.0),
         "weight": 1.2,  # Pain gets higher priority
     },
     "sleepy": {
         "blendshape_signals": {
-            "eyeBlinkLeft": 0.5,       # Heavy/drooping eyelids
-            "eyeBlinkRight": 0.5,
-            "jawOpen": 0.3,            # Yawning
-            "mouthFrownLeft": 0.2,
-            "mouthFrownRight": 0.2,
+            "eyeBlinkLeft": 0.15,      # Heavy/drooping eyelids
+            "eyeBlinkRight": 0.15,
+            "jawOpen": 0.10,           # Yawning
+            "mouthFrownLeft": 0.08,
+            "mouthFrownRight": 0.08,
         },
         "expression_boost": {"sad": 0.3, "neutral": 0.2},
         "distress_range": (0.15, 0.55),
@@ -206,14 +222,14 @@ NEED_PATTERNS = {
     },
     "diaper": {
         "blendshape_signals": {
-            "mouthFrownLeft": 0.4,
-            "mouthFrownRight": 0.4,
-            "noseSneerLeft": 0.4,      # Disgust/discomfort
-            "noseSneerRight": 0.4,
-            "browDownLeft": 0.3,
-            "browDownRight": 0.3,
-            "cheekSquintLeft": 0.3,
-            "cheekSquintRight": 0.3,
+            "mouthFrownLeft": 0.12,
+            "mouthFrownRight": 0.12,
+            "noseSneerLeft": 0.12,     # Disgust/discomfort
+            "noseSneerRight": 0.12,
+            "browDownLeft": 0.10,
+            "browDownRight": 0.10,
+            "cheekSquintLeft": 0.10,
+            "cheekSquintRight": 0.10,
         },
         "expression_boost": {"disgust": 0.5, "sad": 0.3, "angry": 0.2},
         "distress_range": (0.25, 0.70),
@@ -221,11 +237,11 @@ NEED_PATTERNS = {
     },
     "calm": {
         "blendshape_signals": {
-            "mouthSmileLeft": 0.3,
-            "mouthSmileRight": 0.3,
+            "mouthSmileLeft": 0.10,
+            "mouthSmileRight": 0.10,
         },
         "expression_boost": {"happy": 0.6, "neutral": 0.5},
-        "distress_range": (0.0, 0.20),
+        "distress_range": (0.0, 0.25),
         "weight": 0.8,
     },
 }
@@ -247,36 +263,56 @@ def _extract_blendshapes(raw_blendshapes) -> dict[str, float]:
 def _compute_distress_from_blendshapes(blendshapes: dict[str, float]) -> float:
     """Compute distress score from ML-predicted blendshape coefficients.
 
-    Uses weighted sum of distress-indicating blendshapes minus calm ones.
-    All values are neural network predictions (0.0–1.0 per AU).
+    Uses **grouped regional max** approach instead of flat averaging:
+    1. Group blendshapes by facial region (brow, eyes, mouth, nose/cheek)
+    2. Take top-2 weighted activations per group (avoids dilution)
+    3. Weight groups: mouth 35%, eyes 25%, brow 25%, nose 15%
+    4. Apply calibration curve for real MediaPipe ranges (0.05–0.50)
+    5. Subtract small calm dampening factor
+
+    MediaPipe blendshape values rarely exceed 0.50 for real photos.
+    The calibration curve maps this realistic range to the full 0–1 scale.
     """
-    # Distress contribution
-    distress_sum = 0.0
-    distress_max_sum = 0.0
-    for name, importance in DISTRESS_BLENDSHAPES.items():
-        score = blendshapes.get(name, 0.0)
-        distress_sum += score * importance
-        distress_max_sum += importance
+    group_scores = {}
 
-    # Calm contribution (reduces distress)
+    for group_name, group_blendshapes in DISTRESS_GROUPS.items():
+        # Compute weighted activation for each blendshape in the group
+        weighted_activations = []
+        for bs_name, importance in group_blendshapes.items():
+            activation = blendshapes.get(bs_name, 0.0)
+            weighted_activations.append(activation * importance)
+
+        # Take top-2 average (captures the signal without dilution)
+        sorted_acts = sorted(weighted_activations, reverse=True)
+        top_n = sorted_acts[:min(2, len(sorted_acts))]
+        group_scores[group_name] = sum(top_n) / len(top_n) if top_n else 0.0
+
+    # Weighted combination of group scores
+    raw_distress = sum(
+        group_scores[g] * GROUP_WEIGHTS[g]
+        for g in DISTRESS_GROUPS
+    )
+
+    # ── Calibration curve ─────────────────────────────────────
+    # MediaPipe values are typically 0.05–0.50. This curve maps
+    # that range to more useful distress scores:
+    #   0.10 → 0.27   (barely noticeable)
+    #   0.20 → 0.47   (mild)
+    #   0.30 → 0.63   (moderate)
+    #   0.40 → 0.79   (strong)
+    #   0.50 → 0.93   (very strong)
+    calibrated = min(raw_distress * 1.8, 1.0) ** 0.7
+
+    # ── Calm dampening (gentle) ───────────────────────────────
     calm_sum = 0.0
-    calm_max_sum = 0.0
+    calm_max = 0.0
     for name, importance in CALM_BLENDSHAPES.items():
-        score = blendshapes.get(name, 0.0)
-        calm_sum += score * importance
-        calm_max_sum += importance
+        calm_sum += blendshapes.get(name, 0.0) * importance
+        calm_max += importance
+    calm_factor = (calm_sum / calm_max) if calm_max > 0 else 0.0
 
-    if distress_max_sum == 0:
-        return 0.0
-
-    # Normalize distress (0–1)
-    raw_distress = distress_sum / distress_max_sum
-
-    # Subtract calm influence (0–1)
-    calm_factor = (calm_sum / calm_max_sum) if calm_max_sum > 0 else 0.0
-
-    # Final score: distress dampened by calmness
-    score = raw_distress - (calm_factor * 0.5)
+    # Only subtract a small fraction — avoid over-dampening
+    score = calibrated - (calm_factor * 0.25)
     return round(min(max(score, 0.0), 1.0), 4)
 
 
@@ -446,8 +482,10 @@ def analyze_face(image: Image.Image) -> dict[str, Any]:
     # Fuse expression into distress if available
     if expression:
         expr_distress = EXPRESSION_DISTRESS.get(expression["label"], 0.3)
-        # 70% blendshape distress + 30% expression distress
-        fused_distress = distress_score * 0.70 + expr_distress * 0.30
+        # 45% blendshape distress + 55% expression distress
+        # Expression model (ViT) is a holistic classifier — more reliable
+        # for overall distress than individual blendshape values
+        fused_distress = distress_score * 0.45 + expr_distress * 0.55
         distress_score = round(min(max(fused_distress, 0.0), 1.0), 4)
 
     # ── 4. Predict need from face ────────────────────────────
