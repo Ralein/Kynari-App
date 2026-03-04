@@ -48,6 +48,16 @@ async def analyze_audio_endpoint(file: UploadFile = File(...)):
         )
 
     data = await file.read()
+    if len(data) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="The audio file is empty. Please record at least 2 seconds of your baby's sounds and try again.",
+        )
+    if len(data) < 1024:
+        raise HTTPException(
+            status_code=400,
+            detail="The audio recording is too short. Please record at least 2 seconds of sound and upload again.",
+        )
     if len(data) > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail="File too large. Maximum size: 25MB")
 
@@ -88,6 +98,16 @@ async def analyze_image_endpoint(file: UploadFile = File(...)):
         )
 
     data = await file.read()
+    if len(data) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="The image file is empty. Please upload a clear photo of your baby's face and try again.",
+        )
+    if len(data) < 100:
+        raise HTTPException(
+            status_code=400,
+            detail="The image file appears to be corrupt or invalid. Please upload a different photo.",
+        )
     if len(data) > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail="File too large. Maximum size: 25MB")
 
@@ -132,6 +152,16 @@ async def analyze_video_endpoint(
         )
 
     data = await file.read()
+    if len(data) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="The video file is empty. Please record a video of your baby and try again.",
+        )
+    if len(data) < 1024:
+        raise HTTPException(
+            status_code=400,
+            detail="The video file is too short or corrupt. Please record a longer video and upload again.",
+        )
     if len(data) > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail="File too large. Maximum size: 25MB")
 
@@ -248,6 +278,16 @@ async def analyze_combined_endpoint(
         )
 
     data = await file.read()
+    if len(data) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="The audio file is empty. Please record at least 2 seconds of your baby's sounds and try again.",
+        )
+    if len(data) < 1024:
+        raise HTTPException(
+            status_code=400,
+            detail="The audio recording is too short. Please record at least 2 seconds of sound and upload again.",
+        )
     if len(data) > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail="File too large. Maximum size: 25MB")
 
