@@ -177,10 +177,10 @@ async def save_analysis_result(body: SaveNeedResultRequest):
     event_id = str(uuid4())
     now = datetime.now(timezone.utc)
 
-    try:
-        from database import get_pool
-        import json
+    from database import get_pool
+    import json
 
+    try:
         pool = get_pool()
         with pool.connection() as conn:
             conn.execute(
@@ -198,28 +198,24 @@ async def save_analysis_result(body: SaveNeedResultRequest):
                  now),
             )
             conn.commit()
-
-        # Trigger baseline recalculation (async-safe)
-        try:
-            from services.baseline_engine import need_baseline_engine
-            await need_baseline_engine.ingest_events(body.child_id, [{
-                "need_label": body.need_label,
-                "confidence": body.confidence,
-                "modality": body.modality,
-                "timestamp": now.isoformat(),
-            }])
-        except Exception as e:
-            logger.warning(f"Need baseline update failed: {e}")
-
     except Exception as e:
         logger.error(f"Failed to save analysis result: {e}")
-        # Return success with a generated ID even if DB is unavailable
-        # This prevents the UI from showing a hard error
-        return SaveResultResponse(
-            success=True,
-            event_id=event_id,
-            session_id=session_id,
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to save analysis result. Please try again.",
         )
+
+    # Trigger baseline recalculation (async-safe, non-blocking)
+    try:
+        from services.baseline_engine import need_baseline_engine
+        await need_baseline_engine.ingest_events(body.child_id, [{
+            "need_label": body.need_label,
+            "confidence": body.confidence,
+            "modality": body.modality,
+            "timestamp": now.isoformat(),
+        }])
+    except Exception as e:
+        logger.warning(f"Need baseline update failed (non-critical): {e}")
 
     return SaveResultResponse(
         success=True,

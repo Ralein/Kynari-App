@@ -448,7 +448,7 @@ export default function AnalyzePage() {
         const confidence = result.confidence ?? result.distress_score ?? 0;
 
         try {
-            await saveAnalysisResult(token, {
+            const res = await saveAnalysisResult(token, {
                 child_id: selectedChild,
                 need_label: needLabel,
                 confidence,
@@ -458,9 +458,14 @@ export default function AnalyzePage() {
                 face_distress_score: result.distress_score,
                 raw_result: result.raw,
             });
-            setSaved(true);
-        } catch {
-            setError("Failed to save result");
+            if (res.success) {
+                setSaved(true);
+            } else {
+                setError("Failed to save result. Please try again.");
+            }
+        } catch (e) {
+            const message = e instanceof Error ? e.message : "Failed to save result";
+            setError(message);
         }
     }, [result, token, selectedChild]);
 

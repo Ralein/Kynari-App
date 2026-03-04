@@ -139,7 +139,7 @@ async def get_baseline_status(child_id: str, user: dict = Depends(get_current_us
     _verify_child_ownership(child_id, user["user_id"])
 
     baselines = fetch_all(
-        "SELECT * FROM child_baselines WHERE child_id = %s",
+        "SELECT * FROM need_baselines WHERE child_id = %s",
         (child_id,),
     )
 

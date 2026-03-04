@@ -8,15 +8,14 @@ import {
     Tooltip,
     ResponsiveContainer,
 } from "recharts";
-import { EMOTION_LABELS, type DailySummary } from "@kynari/shared";
+import { NEED_LABELS, type DailySummary } from "@kynari/shared";
 
-const SOFT_EMOTION_COLORS: Record<string, string> = {
-    happy: "#86efac",
-    sad: "#93c5fd",
-    angry: "#fca5a5",
-    fearful: "#c4b5fd",
-    neutral: "#cbd5e1",
-    frustrated: "#fdba74",
+const SOFT_NEED_COLORS: Record<string, string> = {
+    hungry: "#fdba74",
+    diaper: "#c4b5fd",
+    sleepy: "#93c5fd",
+    pain: "#fca5a5",
+    calm: "#86efac",
 };
 
 interface WeekTrendChartProps {
@@ -37,8 +36,8 @@ export function WeekTrendChart({ summaries }: WeekTrendChartProps) {
             weekday: "short",
         });
         const entry: Record<string, string | number> = { day, date: s.date };
-        for (const emotion of EMOTION_LABELS) {
-            entry[emotion] = s.emotion_distribution[emotion] ?? 0;
+        for (const need of NEED_LABELS) {
+            entry[need] = s.need_distribution[need] ?? 0;
         }
         return entry;
     });
@@ -75,14 +74,14 @@ export function WeekTrendChart({ summaries }: WeekTrendChartProps) {
                             String(name),
                         ]}
                     />
-                    {[...EMOTION_LABELS].reverse().map((emotion) => (
+                    {[...NEED_LABELS].reverse().map((need) => (
                         <Area
-                            key={emotion}
+                            key={need}
                             type="monotone"
-                            dataKey={emotion}
+                            dataKey={need}
                             stackId="1"
-                            stroke={SOFT_EMOTION_COLORS[emotion] ?? "#cbd5e1"}
-                            fill={SOFT_EMOTION_COLORS[emotion] ?? "#cbd5e1"}
+                            stroke={SOFT_NEED_COLORS[need] ?? "#cbd5e1"}
+                            fill={SOFT_NEED_COLORS[need] ?? "#cbd5e1"}
                             fillOpacity={0.6}
                             strokeWidth={0}
                         />

@@ -40,11 +40,11 @@ export interface ChildCreate {
 export interface DailySummary {
     child_id: string;
     date: string; // YYYY-MM-DD
-    dominant_emotion: EmotionLabel;
-    emotion_distribution: Record<EmotionLabel, number>; // percentages 0–100
+    dominant_need: NeedLabel;
+    need_distribution: Record<NeedLabel, number>; // percentages 0–100
     total_events: number;
     baseline_deviation: number | null; // z-score, null if baseline not formed yet
-    insight_text: string; // e.g. "More frustrated than usual around 5–6pm"
+    insight_text: string; // e.g. "Baby needed feeding most today"
 }
 
 // ─── Baseline ───────────────────────────────────────────────
@@ -80,7 +80,7 @@ export interface BaselineStatus {
 export interface HourlyGroup {
     hour: number;
     events: EmotionEvent[];
-    dominant_emotion: EmotionLabel;
+    dominant_need: NeedLabel;
 }
 
 // ─── Emotion Metadata ───────────────────────────────────────

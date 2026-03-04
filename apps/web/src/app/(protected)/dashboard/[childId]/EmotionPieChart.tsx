@@ -1,16 +1,15 @@
 "use client";
 
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-import { EMOTION_EMOJI, type EmotionLabel } from "@kynari/shared";
+import { NEED_EMOJI, type NeedLabel } from "@kynari/shared";
 
-/* Updated softer pastel emotion colors */
-const SOFT_EMOTION_COLORS: Record<string, string> = {
-    happy: "#86efac",
-    sad: "#93c5fd",
-    angry: "#fca5a5",
-    fearful: "#c4b5fd",
-    neutral: "#cbd5e1",
-    frustrated: "#fdba74",
+/* Soft pastel need colors */
+const SOFT_NEED_COLORS: Record<string, string> = {
+    hungry: "#fdba74",
+    diaper: "#c4b5fd",
+    sleepy: "#93c5fd",
+    pain: "#fca5a5",
+    calm: "#86efac",
 };
 
 interface EmotionPieChartProps {
@@ -20,18 +19,18 @@ interface EmotionPieChartProps {
 export function EmotionPieChart({ distribution }: EmotionPieChartProps) {
     const data = Object.entries(distribution)
         .filter(([, value]) => value > 0)
-        .map(([emotion, value]) => ({
-            name: emotion,
+        .map(([need, value]) => ({
+            name: need,
             value: Math.round(value * 10) / 10,
-            emoji: EMOTION_EMOJI[emotion as EmotionLabel] ?? "❓",
-            color: SOFT_EMOTION_COLORS[emotion] ?? "#cbd5e1",
+            emoji: NEED_EMOJI[need as NeedLabel] ?? "❓",
+            color: SOFT_NEED_COLORS[need] ?? "#cbd5e1",
         }))
         .sort((a, b) => b.value - a.value);
 
     if (data.length === 0) {
         return (
             <div className="flex items-center justify-center h-48 text-text-muted text-sm">
-                No emotion data available
+                No data available
             </div>
         );
     }
@@ -61,7 +60,7 @@ export function EmotionPieChart({ distribution }: EmotionPieChartProps) {
                         <Tooltip
                             formatter={(value, name) => [
                                 `${value}%`,
-                                `${EMOTION_EMOJI[String(name) as EmotionLabel] ?? ""} ${name}`,
+                                `${NEED_EMOJI[String(name) as NeedLabel] ?? ""} ${name}`,
                             ]}
                             contentStyle={{
                                 borderRadius: "14px",
@@ -83,7 +82,7 @@ export function EmotionPieChart({ distribution }: EmotionPieChartProps) {
                             className="w-3 h-3 rounded-full shrink-0"
                             style={{ backgroundColor: item.color }}
                         />
-                        <span className="text-sm text-text-secondary">
+                        <span className="text-sm text-text-secondary capitalize">
                             {item.emoji} {item.name}
                         </span>
                         <span className="text-sm font-semibold text-text-primary ml-auto">
