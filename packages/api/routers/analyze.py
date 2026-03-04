@@ -60,14 +60,14 @@ async def analyze_audio_endpoint(file: UploadFile = File(...)):
         return NeedPredictionResponse(
             success=False,
             error="model_unavailable",
-            message="Audio analysis model is loading. Please try again in a moment.",
+            message="Audio analysis model is loading. Please try again in a few seconds.",
         )
     except Exception as e:
         logger.error(f"Unexpected audio analysis error: {e}")
         return NeedPredictionResponse(
             success=False,
             error="analysis_failed",
-            message="Failed to analyze audio. Please try again.",
+            message="Could not analyze this audio. Please record at least 2 seconds of your baby's sounds in a quiet environment.",
         )
 
 
@@ -101,14 +101,14 @@ async def analyze_image_endpoint(file: UploadFile = File(...)):
         return FaceDistressResponse(
             success=False,
             error="model_unavailable",
-            message="Face analysis model is loading. Please try again in a moment.",
+            message="Face analysis model is loading. Please try again in a few seconds.",
         )
     except Exception as e:
         logger.error(f"Unexpected image analysis error: {e}")
         return FaceDistressResponse(
             success=False,
             error="analysis_failed",
-            message="Failed to analyze image. Please try a different photo.",
+            message="Could not analyze this image. Please upload a clear, well-lit photo of your baby's face.",
         )
 
 

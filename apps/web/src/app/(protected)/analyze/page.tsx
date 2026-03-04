@@ -129,8 +129,8 @@ function AnalyzingOverlay() {
                             key={i}
                             title={phase.label}
                             className={`h-2 rounded-full transition-all duration-500 ${i <= phaseIndex
-                                    ? "w-6 bg-gradient-to-r from-primary-500 to-primary-400"
-                                    : "w-2 bg-primary-200/60"
+                                ? "w-6 bg-gradient-to-r from-primary-500 to-primary-400"
+                                : "w-2 bg-primary-200/60"
                                 }`}
                         />
                     ))}
@@ -624,11 +624,54 @@ export default function AnalyzePage() {
             {/* Analyzing Overlay */}
             {isAnalyzing && <AnalyzingOverlay />}
 
-            {/* Error Display */}
+            {/* Error Display — actionable, suggests retry */}
             {error && (
-                <div className="card-soft p-5 border-l-4 border-red-300 bg-red-50/50 flex items-start gap-3">
-                    <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                    <p className="text-red-700 text-sm">{error}</p>
+                <div className="card-soft p-6 border-l-4 border-red-300 bg-red-50/50 animate-fade-in">
+                    <div className="flex items-start gap-3">
+                        <AlertCircle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                            <p className="font-bold text-red-800 text-sm mb-1">
+                                {error.includes("face") || error.includes("Face") || error.includes("photo")
+                                    ? "😕 Couldn't detect a face"
+                                    : error.includes("audio") || error.includes("Audio") || error.includes("short")
+                                        ? "🎙️ Audio issue"
+                                        : error.includes("connect") || error.includes("server")
+                                            ? "📡 Connection issue"
+                                            : "⚠️ Something went wrong"}
+                            </p>
+                            <p className="text-red-700 text-sm mb-3">{error}</p>
+                            <div className="text-xs text-red-600 space-y-1 mb-4">
+                                {(error.includes("face") || error.includes("Face") || error.includes("photo") || error.includes("image") || error.includes("Image")) && (
+                                    <>
+                                        <p>💡 Make sure your baby&apos;s face is clearly visible and well-lit</p>
+                                        <p>💡 Try moving closer or adjusting the angle</p>
+                                        <p>💡 Avoid blurry photos — hold the camera steady</p>
+                                    </>
+                                )}
+                                {(error.includes("audio") || error.includes("Audio") || error.includes("short") || error.includes("record")) && (
+                                    <>
+                                        <p>💡 Record for at least 2–3 seconds of your baby&apos;s sounds</p>
+                                        <p>💡 Hold your phone closer to your baby</p>
+                                        <p>💡 Reduce background noise if possible</p>
+                                    </>
+                                )}
+                                {(error.includes("connect") || error.includes("server")) && (
+                                    <p>💡 Check your internet connection and try again</p>
+                                )}
+                            </div>
+                            <button
+                                onClick={() => {
+                                    setError(null);
+                                    setResult(null);
+                                    setSaved(false);
+                                    setFeedbackGiven(false);
+                                }}
+                                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-red-700 bg-red-100 hover:bg-red-200 border border-red-200 transition-colors"
+                            >
+                                Try Again
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
 
