@@ -14,9 +14,8 @@ from pathlib import Path
 API_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(API_DIR))
 
-from ml.face_analyzer import face_analyzer
-from ml.audio_analyzer import audio_analyzer
-import numpy as np
+from ml.face_analyzer import face_analyzer  # noqa: E402
+from ml.audio_analyzer import audio_analyzer  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("evaluate_models")

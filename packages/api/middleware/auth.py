@@ -3,9 +3,7 @@
 import httpx
 from fastapi import HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import jwt, JWTError, jwk
-from jose.utils import base64url_decode
-from functools import lru_cache
+from jose import jwt, JWTError
 from config import get_settings
 
 security = HTTPBearer()

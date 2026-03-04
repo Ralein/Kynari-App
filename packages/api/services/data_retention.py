@@ -7,7 +7,7 @@ full child data deletion, and retention status reporting.
 import logging
 from datetime import datetime, timedelta, timezone
 
-from database import fetch_one, fetch_all, get_pool
+from database import fetch_one, get_pool
 
 logger = logging.getLogger(__name__)
 

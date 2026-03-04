@@ -1,7 +1,7 @@
 """Tests for the baseline engine."""
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from tests.conftest import MockPool
 from services.baseline_engine import BaselineEngine, _hour_to_period
 

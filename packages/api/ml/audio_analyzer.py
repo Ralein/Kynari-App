@@ -182,10 +182,8 @@ def extract_audio_features(y: np.ndarray, sr: int) -> dict[str, Any]:
     # MFCCs — timbral texture (13 coefficients)
     try:
         mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
-        mfcc_means = [float(np.mean(mfccs[i])) for i in range(13)]
         mfcc_var = float(np.mean(np.var(mfccs, axis=1)))
     except Exception:
-        mfcc_means = [0.0] * 13
         mfcc_var = 0.0
 
     # RMS energy variance (rhythmic patterns)

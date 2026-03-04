@@ -5,7 +5,6 @@ from uuid import uuid4
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, File, Form, UploadFile, HTTPException
-from pydantic import BaseModel
 
 from models.schemas import (
     NeedPredictionResponse,
@@ -232,7 +231,7 @@ async def save_analysis_result(body: SaveNeedResultRequest):
         logger.error(f"Failed to save analysis result: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to save analysis result. Please try again.",
+            detail="Failed to save analysis result. Please try again.",
         )
 
     # Trigger baseline recalculation (async-safe, non-blocking)

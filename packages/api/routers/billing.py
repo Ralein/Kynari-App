@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from config import get_settings
-from database import fetch_one, execute_returning, get_pool
+from database import fetch_one, get_pool
 from middleware.auth import get_current_user
 
 logger = logging.getLogger(__name__)

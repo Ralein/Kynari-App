@@ -11,7 +11,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from database import get_pool, fetch_all, fetch_one
+from database import get_pool, fetch_all
 
 logger = logging.getLogger(__name__)
 

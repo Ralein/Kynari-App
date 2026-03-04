@@ -1,7 +1,7 @@
 """Shared test fixtures."""
 
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from datetime import datetime, date, timezone, timedelta
 from fastapi.testclient import TestClient
 
