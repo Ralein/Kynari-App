@@ -1,6 +1,5 @@
 """Children CRUD router."""
 
-import json
 from fastapi import APIRouter, Depends, HTTPException
 from middleware.auth import get_current_user
 from models.schemas import ChildCreate, ChildResponse

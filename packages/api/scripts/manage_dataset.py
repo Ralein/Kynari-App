@@ -9,7 +9,6 @@ import sys
 import json
 import logging
 from pathlib import Path
-from datetime import datetime
 import psycopg
 from psycopg.rows import dict_row
 
@@ -17,7 +16,7 @@ from psycopg.rows import dict_row
 API_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(API_DIR))
 
-from config import get_settings
+from config import get_settings  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("dataset_manager")

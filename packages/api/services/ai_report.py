@@ -4,7 +4,6 @@ Uses Anthropic Claude to create warm, parent-friendly weekly
 summaries of a child's emotional patterns.
 """
 
-import json
 import logging
 from datetime import date, timedelta
 

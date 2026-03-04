@@ -1,6 +1,5 @@
 """Tests for the baby need detection ML pipeline."""
 
-import pytest
 from unittest.mock import patch, MagicMock
 from datetime import datetime, timezone, timedelta
 

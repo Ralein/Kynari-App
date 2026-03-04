@@ -2,7 +2,6 @@
 
 import io
 import json
-import pytest
 from unittest.mock import patch, MagicMock
 
 
@@ -90,8 +89,8 @@ class TestCombinedEndpoint:
                         (32000).to_bytes(4, "little") + (2).to_bytes(2, "little") + \
                         (16).to_bytes(2, "little") + b"data" + (0).to_bytes(4, "little")
 
-        with patch("routers.analyze.analyze_audio_bytes", return_value=mock_audio_result) as mock_audio, \
-             patch("routers.analyze.fuse_predictions", return_value=mock_fused_result) as mock_fuse:
+        with patch("routers.analyze.analyze_audio_bytes", return_value=mock_audio_result), \
+             patch("routers.analyze.fuse_predictions", return_value=mock_fused_result):
 
             # Need to patch at module level since they're imported inside the function
             with patch("ml.audio_analyzer.analyze_audio_bytes", return_value=mock_audio_result), \

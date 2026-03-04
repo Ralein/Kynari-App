@@ -3,7 +3,7 @@
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from models.schemas import ContextUpdate, ContextResponse
 from database import get_pool, fetch_one

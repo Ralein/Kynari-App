@@ -11,7 +11,6 @@ from models.schemas import (
 from database import fetch_one, fetch_all, get_pool
 from services.baseline_engine import need_baseline_engine
 from services.summary_generator import summary_generator
-from collections import defaultdict
 from datetime import date
 
 router = APIRouter(prefix="/events", tags=["events"])

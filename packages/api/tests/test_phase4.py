@@ -1,7 +1,7 @@
 """Tests for Phase 4: AI reports and tier system."""
 
 from datetime import date
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
