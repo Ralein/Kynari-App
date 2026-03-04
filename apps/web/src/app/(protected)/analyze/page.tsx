@@ -62,16 +62,13 @@ const ANALYSIS_PHASES = [
 
 function AnalyzingOverlay() {
     const [phaseIndex, setPhaseIndex] = useState(0);
-    const [elapsed, setElapsed] = useState(0);
 
     useEffect(() => {
         const phaseInterval = setInterval(() => {
             setPhaseIndex((prev) => Math.min(prev + 1, ANALYSIS_PHASES.length - 1));
         }, 2000);
-        const tick = setInterval(() => setElapsed((t) => t + 1), 1000);
         return () => {
             clearInterval(phaseInterval);
-            clearInterval(tick);
         };
     }, []);
 
@@ -172,7 +169,11 @@ export default function AnalyzePage() {
 
     useEffect(() => {
         if (children?.length && !selectedChild) {
-            setSelectedChild(children[0].id);
+            // Use setTimeout to avoid synchronous setState inside effect warning
+            const timer = setTimeout(() => {
+                setSelectedChild(children[0].id);
+            }, 0);
+            return () => clearTimeout(timer);
         }
     }, [children, selectedChild]);
 
