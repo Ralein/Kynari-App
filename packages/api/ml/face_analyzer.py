@@ -1,26 +1,21 @@
-"""Face distress analyzer — ML-based baby face need/distress detection.
+"""Face distress analyzer — DeepFace-powered baby face need/distress detection.
 
 Pipeline:
-1. Face detection + 52 blendshape prediction via MediaPipe FaceLandmarker
-2. Expression classification via HuggingFace FER (ViT) model
-3. Map blendshape action units → NFCS distress score
-4. Predict likely baby need from expression + blendshape patterns
-5. Output distress_score, need_label, expression, and raw blendshape features
+1. Face detection + emotion classification via DeepFace (RetinaFace backend)
+2. Map emotions → NFCS-inspired distress score
+3. Predict likely baby need from emotion profile
+4. Quality gate: reject poor photos with actionable user feedback
 
-Uses TWO neural networks:
-  - MediaPipe FaceLandmarker with blendshapes (52 AU-like coefficients)
-  - trpakov/vit-face-expression (facial expression recognition)
+Dependencies: deepface, numpy, Pillow, opencv-python
 
 Based on:
   - NFCS (Neonatal Facial Coding System) — Grunau & Craig, 1987
   - FACS (Facial Action Coding System) — Ekman & Friesen, 1978
 """
 
-import io
-import os
 import base64
+import io
 import logging
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -28,13 +23,8 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
-# ─── Lazy-loaded singletons ────────────────────────────────
-_face_landmarker = None
-_expression_classifier = None
-
-# Path to the downloaded .task model file
-_MODEL_DIR = Path(__file__).parent / "models"
-_MODEL_PATH = _MODEL_DIR / "face_landmarker.task"
+# ─── Lazy-loaded singleton ────────────────────────────────
+_deepface_loaded = False
 
 # ─── Need prediction labels ───────────────────────────────
 NEED_LABELS = ["hungry", "diaper", "sleepy", "pain", "calm"]
@@ -47,363 +37,171 @@ NEED_DESCRIPTIONS = {
     "diaper": "Your baby may need a diaper change 💩",
 }
 
-# ─── Expression → distress mapping ────────────────────────
-EXPRESSION_DISTRESS = {
-    "angry": 0.85,
-    "disgust": 0.70,
+# Quality gate messages
+QUALITY_ERROR_MESSAGES = {
+    "no_face": (
+        "We couldn't detect a face in this image. Please take a clearer photo "
+        "with your baby's face visible, well-lit, and facing the camera."
+    ),
+    "poor_quality": (
+        "The image quality is too low for accurate analysis. Please ensure "
+        "the photo is well-lit, not blurry, and shows your baby's face clearly "
+        "from the front."
+    ),
+}
+
+
+def _ensure_deepface():
+    """Lazy-import DeepFace on first use."""
+    global _deepface_loaded
+    if not _deepface_loaded:
+        try:
+            from deepface import DeepFace  # noqa: F401
+            _deepface_loaded = True
+            logger.info("DeepFace loaded successfully")
+        except ImportError as e:
+            raise RuntimeError(
+                "DeepFace is not installed. Run: pip install deepface"
+            ) from e
+
+
+# ─── Emotion → distress mapping ──────────────────────────
+# DeepFace returns 7 emotions: angry, disgust, fear, happy, sad, surprise, neutral
+# Each maps to a base distress level (0 = calm, 1 = max distress)
+EMOTION_DISTRESS = {
+    "angry": 0.88,
     "fear": 0.80,
-    "sad": 0.75,
-    "surprise": 0.40,
-    "happy": 0.05,
-    "neutral": 0.10,
+    "sad": 0.65,
+    "disgust": 0.62,
+    "surprise": 0.30,
+    "happy": 0.00,
+    "neutral": 0.08,
 }
 
 
-def _load_face_landmarker():
-    """Lazy-load MediaPipe FaceLandmarker with blendshapes enabled."""
-    global _face_landmarker
-    if _face_landmarker is not None:
-        return _face_landmarker
+def _compute_distress_from_emotions(emotions: dict[str, float]) -> float:
+    """Compute distress score from DeepFace emotion probability distribution.
 
-    try:
-        import mediapipe as mp
+    Uses weighted combination of all emotion scores (not just the top-1),
+    so mixed emotions are captured.
 
-        if not _MODEL_PATH.exists():
-            raise FileNotFoundError(
-                f"Face landmarker model not found at {_MODEL_PATH}. "
-                "Download from: https://storage.googleapis.com/mediapipe-models/"
-                "face_landmarker/face_landmarker/float16/latest/face_landmarker.task"
-            )
+    Returns 0.0 (calm) to 1.0 (extreme distress).
+    """
+    if not emotions:
+        return 0.2  # Default mild uncertainty
 
-        base_options = mp.tasks.BaseOptions(
-            model_asset_path=str(_MODEL_PATH)
-        )
-        options = mp.tasks.vision.FaceLandmarkerOptions(
-            base_options=base_options,
-            running_mode=mp.tasks.vision.RunningMode.IMAGE,
-            num_faces=1,
-            min_face_detection_confidence=0.5,
-            min_face_presence_confidence=0.5,
-            output_face_blendshapes=True,       # ← ML-predicted action units
-            output_facial_transformation_matrixes=False,
-        )
-        _face_landmarker = mp.tasks.vision.FaceLandmarker.create_from_options(options)
-        logger.info("MediaPipe FaceLandmarker loaded with blendshapes enabled")
-    except Exception as e:
-        logger.error(f"Failed to load MediaPipe FaceLandmarker: {e}")
-        raise RuntimeError("Face landmarker unavailable") from e
-    return _face_landmarker
+    # DeepFace returns percentages (0-100), normalise to [0,1]
+    total = sum(emotions.values())
+    if total <= 0:
+        return 0.2
+
+    distress = 0.0
+    for emotion_name, pct in emotions.items():
+        weight = pct / total  # Normalize to probability
+        base = EMOTION_DISTRESS.get(emotion_name.lower(), 0.2)
+        distress += weight * base
+
+    # Apply infant calibration curve
+    # Infants show less dynamic range than adults — stretch the mid-range
+    calibrated = min(distress * 1.3, 1.0) ** 0.7
+
+    return round(min(max(calibrated, 0.0), 1.0), 4)
 
 
-def _load_expression_classifier():
-    """Lazy-load the facial expression recognition model."""
-    global _expression_classifier
-    if _expression_classifier is not None:
-        return _expression_classifier
+def _extract_stress_features(emotions: dict[str, float]) -> dict[str, float]:
+    """Extract the top activated features for display (replaces blendshapes)."""
+    if not emotions:
+        return {}
 
-    try:
-        from transformers import pipeline
-        _expression_classifier = pipeline(
-            "image-classification",
-            model="trpakov/vit-face-expression",
-            device=-1,  # CPU
-        )
-        logger.info("FER expression classifier loaded (trpakov/vit-face-expression)")
-    except Exception as e:
-        logger.warning(f"FER classifier failed to load (non-fatal): {e}")
-        _expression_classifier = None
+    # Normalise to 0-1 range
+    total = sum(emotions.values())
+    if total <= 0:
+        return {}
 
-    return _expression_classifier
+    features = {}
+    for name, pct in emotions.items():
+        normalised = round(pct / total, 4)
+        if normalised > 0.01:
+            features[name] = normalised
+
+    # Sort by activation, keep top 5
+    sorted_feats = sorted(features.items(), key=lambda x: x[1], reverse=True)
+    return {name: score for name, score in sorted_feats[:5]}
 
 
-# ─── Blendshape groups by facial region (NFCS-mapped) ────
-#
-# Grouped by region so we can take the top activations per group
-# instead of averaging across all blendshapes (which dilutes the signal).
-# MediaPipe blendshape values typically range 0.05–0.50 for real photos
-# (rarely exceed 0.6), so thresholds and weights are tuned accordingly.
+# ─── Need prediction from emotions ───────────────────────
 
-DISTRESS_GROUPS = {
-    "brow": {
-        # NFCS: brow bulge
-        "browDownLeft": 1.0,
-        "browDownRight": 1.0,
-        "browInnerUp": 0.8,       # Inner brow raise (worry/pain)
-    },
-    "eyes": {
-        # NFCS: eye squeeze
-        "eyeSquintLeft": 1.0,
-        "eyeSquintRight": 1.0,
-        "eyeBlinkLeft": 0.5,      # Tightly shut eyes
-        "eyeBlinkRight": 0.5,
-    },
-    "mouth": {
-        # NFCS: open mouth, stretch mouth — most important for cry detection
-        "jawOpen": 0.8,
-        "mouthStretchLeft": 1.0,
-        "mouthStretchRight": 1.0,
-        "mouthFrownLeft": 1.0,
-        "mouthFrownRight": 1.0,
-        "mouthPucker": 0.5,
-    },
-    "nose_cheek": {
-        # NFCS: nasolabial furrow, cheek raise
-        "noseSneerLeft": 0.8,
-        "noseSneerRight": 0.8,
-        "cheekSquintLeft": 0.6,
-        "cheekSquintRight": 0.6,
-        "tongueOut": 0.5,
-    },
-}
-
-# How much each region contributes to overall distress
-# Mouth is the strongest distress indicator in infants
-GROUP_WEIGHTS = {
-    "brow": 0.25,
-    "eyes": 0.25,
-    "mouth": 0.35,
-    "nose_cheek": 0.15,
-}
-
-# Calm/content blendshapes (dampen distress)
-CALM_BLENDSHAPES = {
-    "mouthSmileLeft": 1.0,
-    "mouthSmileRight": 1.0,
-    "mouthDimpleLeft": 0.3,
-    "mouthDimpleRight": 0.3,
-}
-
-# ─── Need pattern signatures ─────────────────────────────
-# Each need has a signature of blendshape patterns + expression.
-# Thresholds are calibrated for REAL MediaPipe output (0.05–0.50 range).
-
-NEED_PATTERNS = {
+NEED_EMOTION_PROFILES = {
     "hungry": {
-        "blendshape_signals": {
-            "mouthPucker": 0.15,       # Sucking reflex
-            "jawOpen": 0.12,           # Rooting/opening
-            "mouthStretchLeft": 0.10,
-            "mouthStretchRight": 0.10,
-            "mouthFrownLeft": 0.12,
-            "mouthFrownRight": 0.12,
-        },
-        "expression_boost": {"sad": 0.4, "angry": 0.3},
-        "distress_range": (0.3, 0.8),
+        "expression_weights": {"sad": 0.35, "angry": 0.25, "disgust": 0.10, "neutral": 0.10},
+        "distress_range": (0.20, 0.70),
         "weight": 1.0,
     },
     "pain": {
-        "blendshape_signals": {
-            "eyeSquintLeft": 0.20,     # Eyes squeezed shut
-            "eyeSquintRight": 0.20,
-            "browDownLeft": 0.15,      # Deep brow furrow
-            "browDownRight": 0.15,
-            "browInnerUp": 0.12,       # Brow bulge
-            "noseSneerLeft": 0.15,     # Nasolabial furrow
-            "noseSneerRight": 0.15,
-            "mouthStretchLeft": 0.20,  # Wide cry
-            "mouthStretchRight": 0.20,
-            "jawOpen": 0.15,
-        },
-        "expression_boost": {"angry": 0.5, "fear": 0.4, "disgust": 0.3},
-        "distress_range": (0.5, 1.0),
-        "weight": 1.2,  # Pain gets higher priority
+        "expression_weights": {"angry": 0.40, "fear": 0.30, "disgust": 0.15, "sad": 0.10},
+        "distress_range": (0.45, 1.0),
+        "weight": 1.15,
     },
     "sleepy": {
-        "blendshape_signals": {
-            "eyeBlinkLeft": 0.15,      # Heavy/drooping eyelids
-            "eyeBlinkRight": 0.15,
-            "jawOpen": 0.10,           # Yawning
-            "mouthFrownLeft": 0.08,
-            "mouthFrownRight": 0.08,
-        },
-        "expression_boost": {"sad": 0.3, "neutral": 0.2},
-        "distress_range": (0.15, 0.55),
-        "weight": 0.9,
+        "expression_weights": {"neutral": 0.35, "sad": 0.25, "surprise": 0.05},
+        "distress_range": (0.05, 0.40),
+        "weight": 0.90,
     },
     "diaper": {
-        "blendshape_signals": {
-            "mouthFrownLeft": 0.12,
-            "mouthFrownRight": 0.12,
-            "noseSneerLeft": 0.12,     # Disgust/discomfort
-            "noseSneerRight": 0.12,
-            "browDownLeft": 0.10,
-            "browDownRight": 0.10,
-            "cheekSquintLeft": 0.10,
-            "cheekSquintRight": 0.10,
-        },
-        "expression_boost": {"disgust": 0.5, "sad": 0.3, "angry": 0.2},
-        "distress_range": (0.25, 0.70),
+        "expression_weights": {"disgust": 0.40, "sad": 0.20, "angry": 0.15},
+        "distress_range": (0.20, 0.65),
         "weight": 1.0,
     },
     "calm": {
-        "blendshape_signals": {
-            "mouthSmileLeft": 0.10,
-            "mouthSmileRight": 0.10,
-        },
-        "expression_boost": {"happy": 0.6, "neutral": 0.5},
-        "distress_range": (0.0, 0.25),
-        "weight": 0.8,
+        "expression_weights": {"happy": 0.50, "neutral": 0.40, "surprise": 0.10},
+        "distress_range": (0.0, 0.20),
+        "weight": 0.85,
     },
 }
 
 
-def _extract_blendshapes(raw_blendshapes) -> dict[str, float]:
-    """Convert MediaPipe blendshape list to a clean dict.
-
-    Each blendshape has .category_name and .score (0.0–1.0).
-    """
-    result = {}
-    for bs in raw_blendshapes:
-        name = bs.category_name
-        if name and name != "_neutral":
-            result[name] = round(float(bs.score), 4)
-    return result
-
-
-def _compute_distress_from_blendshapes(blendshapes: dict[str, float]) -> float:
-    """Compute distress score from ML-predicted blendshape coefficients.
-
-    Uses **grouped regional max** approach instead of flat averaging:
-    1. Group blendshapes by facial region (brow, eyes, mouth, nose/cheek)
-    2. Take top-2 weighted activations per group (avoids dilution)
-    3. Weight groups: mouth 35%, eyes 25%, brow 25%, nose 15%
-    4. Apply calibration curve for real MediaPipe ranges (0.05–0.50)
-    5. Subtract small calm dampening factor
-
-    MediaPipe blendshape values rarely exceed 0.50 for real photos.
-    The calibration curve maps this realistic range to the full 0–1 scale.
-    """
-    group_scores = {}
-
-    for group_name, group_blendshapes in DISTRESS_GROUPS.items():
-        # Compute weighted activation for each blendshape in the group
-        weighted_activations = []
-        for bs_name, importance in group_blendshapes.items():
-            activation = blendshapes.get(bs_name, 0.0)
-            weighted_activations.append(activation * importance)
-
-        # Take top-2 average (captures the signal without dilution)
-        sorted_acts = sorted(weighted_activations, reverse=True)
-        top_n = sorted_acts[:min(2, len(sorted_acts))]
-        group_scores[group_name] = sum(top_n) / len(top_n) if top_n else 0.0
-
-    # Weighted combination of group scores
-    raw_distress = sum(
-        group_scores[g] * GROUP_WEIGHTS[g]
-        for g in DISTRESS_GROUPS
-    )
-
-    # ── Calibration curve ─────────────────────────────────────
-    # MediaPipe values are typically 0.05–0.50. This curve maps
-    # that range to more useful distress scores:
-    #   0.10 → 0.27   (barely noticeable)
-    #   0.20 → 0.47   (mild)
-    #   0.30 → 0.63   (moderate)
-    #   0.40 → 0.79   (strong)
-    #   0.50 → 0.93   (very strong)
-    calibrated = min(raw_distress * 1.8, 1.0) ** 0.7
-
-    # ── Calm dampening (gentle) ───────────────────────────────
-    calm_sum = 0.0
-    calm_max = 0.0
-    for name, importance in CALM_BLENDSHAPES.items():
-        calm_sum += blendshapes.get(name, 0.0) * importance
-        calm_max += importance
-    calm_factor = (calm_sum / calm_max) if calm_max > 0 else 0.0
-
-    # Only subtract a small fraction — avoid over-dampening
-    score = calibrated - (calm_factor * 0.25)
-    return round(min(max(score, 0.0), 1.0), 4)
-
-
-def _classify_expression(image: Image.Image) -> dict[str, Any] | None:
-    """Run FER expression classifier on the image.
-
-    Returns dict with 'label', 'score', and 'all_expressions'.
-    Returns None if classifier unavailable.
-    """
-    classifier = _load_expression_classifier()
-    if classifier is None:
-        return None
-
-    try:
-        results = classifier(image)
-        if not results:
-            return None
-
-        all_expressions = {}
-        for r in results:
-            all_expressions[r["label"]] = round(r["score"], 4)
-
-        top = results[0]
-        return {
-            "label": top["label"],
-            "score": round(top["score"], 4),
-            "all_expressions": all_expressions,
-        }
-    except Exception as e:
-        logger.warning(f"Expression classification failed (non-fatal): {e}")
-        return None
-
-
 def _predict_need_from_face(
-    blendshapes: dict[str, float],
+    emotions: dict[str, float],
     distress_score: float,
-    expression: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """Predict the most likely baby need from face signals.
+    """Predict baby need from DeepFace emotion profile."""
+    # Normalise emotion percentages to probabilities
+    total_emo = sum(emotions.values())
+    emo_probs = {}
+    if total_emo > 0:
+        emo_probs = {k.lower(): v / total_emo for k, v in emotions.items()}
 
-    Uses blendshape pattern matching + expression classification
-    to score each possible need.
-    """
     need_scores: dict[str, float] = {label: 0.0 for label in NEED_LABELS}
 
-    for need_name, pattern in NEED_PATTERNS.items():
+    for need_name, profile in NEED_EMOTION_PROFILES.items():
         score = 0.0
 
-        # 1. Blendshape signal matching (60% of signal)
-        bs_signals = pattern["blendshape_signals"]
-        if bs_signals:
-            match_score = 0.0
-            for bs_name, threshold in bs_signals.items():
-                actual = blendshapes.get(bs_name, 0.0)
-                if actual >= threshold:
-                    match_score += actual
-                else:
-                    # Partial credit for being close
-                    match_score += actual * (actual / max(threshold, 0.01))
-            max_possible = sum(1.0 + t for t in bs_signals.values())
-            score += 0.60 * (match_score / max(max_possible, 0.01))
+        # 1. Emotion profile matching (60%)
+        expr_match = 0.0
+        for emo_name, weight in profile["expression_weights"].items():
+            expr_match += emo_probs.get(emo_name, 0.0) * weight
+        score += 0.60 * min(expr_match * 2.5, 1.0)  # Scale up since weights < 1
 
-        # 2. Expression boost (25% of signal)
-        if expression and expression.get("all_expressions"):
-            expr_boost = 0.0
-            for expr_name, boost_weight in pattern.get("expression_boost", {}).items():
-                expr_score = expression["all_expressions"].get(expr_name, 0.0)
-                expr_boost += expr_score * boost_weight
-            score += 0.25 * min(expr_boost, 1.0)
-
-        # 3. Distress range match (15% of signal)
-        d_min, d_max = pattern["distress_range"]
+        # 2. Distress range match (25%)
+        d_min, d_max = profile["distress_range"]
         if d_min <= distress_score <= d_max:
-            # Perfect range match
             range_center = (d_min + d_max) / 2.0
             range_width = d_max - d_min
             closeness = 1.0 - abs(distress_score - range_center) / max(range_width / 2, 0.01)
-            score += 0.15 * min(max(closeness, 0.0), 1.0)
+            score += 0.25 * min(max(closeness, 0.0), 1.0)
 
-        # Apply need weight
-        need_scores[need_name] = score * pattern.get("weight", 1.0)
+        # 3. Small base prior (15%) — prevents zero scores
+        score += 0.15 * 0.2
+
+        need_scores[need_name] = score * profile.get("weight", 1.0)
 
     # Normalize
     total = sum(need_scores.values())
     if total > 0:
         need_scores = {k: round(v / total, 4) for k, v in need_scores.items()}
     else:
-        # Fallback: uniform with slight calm bias
         need_scores = {k: 0.2 for k in NEED_LABELS}
 
-    # Sort and pick top
     sorted_needs = sorted(need_scores.items(), key=lambda x: x[1], reverse=True)
     primary = sorted_needs[0]
     secondary = sorted_needs[1] if len(sorted_needs) > 1 else None
@@ -417,16 +215,11 @@ def _predict_need_from_face(
     }
 
 
-def _get_top_blendshapes(blendshapes: dict[str, float], n: int = 8) -> dict[str, float]:
-    """Get the N most activated blendshapes (for display)."""
-    sorted_bs = sorted(blendshapes.items(), key=lambda x: x[1], reverse=True)
-    return {name: score for name, score in sorted_bs[:n] if score > 0.01}
-
+# ─── Image helpers ────────────────────────────────────────
 
 def decode_image(data: str | bytes) -> Image.Image:
     """Decode base64 string or raw bytes into a PIL Image."""
     if isinstance(data, str):
-        # Strip data URI prefix if present
         if "," in data:
             data = data.split(",", 1)[1]
         raw = base64.b64decode(data)
@@ -435,76 +228,118 @@ def decode_image(data: str | bytes) -> Image.Image:
     return Image.open(io.BytesIO(raw)).convert("RGB")
 
 
+# ─── Main entry point ─────────────────────────────────────
+
 def analyze_face(image: Image.Image) -> dict[str, Any]:
-    """Full ML pipeline: detect face → extract blendshapes → classify expression → predict need.
+    """Full ML pipeline: detect face → emotions → distress → need.
 
-    Uses TWO neural networks:
-    1. MediaPipe FaceLandmarker → 52 blendshape coefficients (action units)
-    2. ViT FER classifier → facial expression label
+    Uses DeepFace with RetinaFace backend for state-of-the-art
+    face detection and 7-class emotion classification.
 
-    Returns:
-    - distress_score (0.0–1.0) from blendshape analysis
-    - need_label from face-only pattern matching
-    - expression label from FER model
-    - top blendshape activations
+    Quality gate:
+      - No face detected → actionable error message
+      - Low confidence region → suggestion to retake photo
+
+    Distress scale:
+      0.00-0.10 calm      0.10-0.25 mild        0.25-0.45 moderate
+      0.45-0.65 high      0.65-0.85 severe       0.85-1.00 worst
     """
-    import mediapipe as mp
+    _ensure_deepface()
+    from deepface import DeepFace
 
-    landmarker = _load_face_landmarker()
-
-    # Convert PIL → numpy array, then to MediaPipe Image
+    # Convert PIL → numpy array for DeepFace
     img_array = np.array(image)
-    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=img_array)
 
-    # Run detection
-    result = landmarker.detect(mp_image)
+    # Validate minimum image dimensions
+    h, w = img_array.shape[:2]
+    if h < 48 or w < 48:
+        return {
+            "success": False,
+            "error": "poor_quality",
+            "message": QUALITY_ERROR_MESSAGES["poor_quality"],
+        }
 
-    if not result.face_landmarks:
+    # ── 1. Run DeepFace analysis ──────────────────────────────
+    try:
+        results = DeepFace.analyze(
+            img_path=img_array,
+            actions=["emotion"],
+            detector_backend="retinaface",
+            enforce_detection=True,
+            silent=True,
+        )
+    except ValueError:
+        # DeepFace raises ValueError when no face is detected
         return {
             "success": False,
             "error": "no_face_detected",
-            "message": "No face detected in the image. Please try again with a clearer photo of your baby's face.",
+            "message": QUALITY_ERROR_MESSAGES["no_face"],
+        }
+    except Exception as e:
+        logger.error(f"DeepFace analysis failed: {e}")
+        return {
+            "success": False,
+            "error": "analysis_failed",
+            "message": (
+                "Face analysis encountered an error. Please try again "
+                "with a different photo."
+            ),
         }
 
-    # ── 1. Extract ML-predicted blendshapes ──────────────────
-    blendshapes = {}
-    if result.face_blendshapes and len(result.face_blendshapes) > 0:
-        blendshapes = _extract_blendshapes(result.face_blendshapes[0])
-    else:
-        logger.warning("Face detected but no blendshapes returned")
+    # DeepFace returns a list of dicts (one per face); take the first
+    if not results:
+        return {
+            "success": False,
+            "error": "no_face_detected",
+            "message": QUALITY_ERROR_MESSAGES["no_face"],
+        }
 
-    # ── 2. Compute distress score from blendshapes ───────────
-    distress_score = _compute_distress_from_blendshapes(blendshapes)
+    face_data = results[0] if isinstance(results, list) else results
 
-    # ── 3. Run expression classifier (secondary model) ───────
-    expression = _classify_expression(image)
+    # ── 2. Check face region quality ──────────────────────────
+    face_region = face_data.get("region", {})
+    face_w = face_region.get("w", 0)
+    face_h = face_region.get("h", 0)
+    face_conf = face_data.get("face_confidence", 0.0)
 
-    # Fuse expression into distress if available
-    if expression:
-        expr_distress = EXPRESSION_DISTRESS.get(expression["label"], 0.3)
-        # 45% blendshape distress + 55% expression distress
-        # Expression model (ViT) is a holistic classifier — more reliable
-        # for overall distress than individual blendshape values
-        fused_distress = distress_score * 0.45 + expr_distress * 0.55
-        distress_score = round(min(max(fused_distress, 0.0), 1.0), 4)
+    # If detected face is very small or low confidence, warn the user
+    if (face_w < 30 or face_h < 30) or (face_conf > 0 and face_conf < 0.5):
+        return {
+            "success": False,
+            "error": "poor_quality",
+            "message": QUALITY_ERROR_MESSAGES["poor_quality"],
+        }
 
-    # ── 4. Predict need from face ────────────────────────────
-    need_prediction = _predict_need_from_face(blendshapes, distress_score, expression)
+    # ── 3. Extract emotions ───────────────────────────────────
+    emotions = face_data.get("emotion", {})
+    dominant_emotion = face_data.get("dominant_emotion", "neutral")
 
-    # ── 5. Get top blendshapes for display ───────────────────
-    top_features = _get_top_blendshapes(blendshapes)
+    # ── 4. Compute distress score ─────────────────────────────
+    distress_score = _compute_distress_from_emotions(emotions)
+
+    # ── 5. Predict need from emotions ─────────────────────────
+    need_prediction = _predict_need_from_face(emotions, distress_score)
+
+    # ── 6. Extract top features for display ───────────────────
+    stress_features = _extract_stress_features(emotions)
+
+    # ── 7. Compute dominant emotion confidence ────────────────
+    total_emo = sum(emotions.values())
+    dominant_conf = round(emotions.get(dominant_emotion, 0.0) / total_emo, 4) if total_emo > 0 else 0.0
 
     # Classify intensity level
-    if distress_score < 0.15:
+    if distress_score < 0.10:
         intensity = "calm"
-    elif distress_score < 0.30:
+    elif distress_score < 0.25:
         intensity = "mild"
-    elif distress_score < 0.50:
+    elif distress_score < 0.45:
         intensity = "moderate"
-    elif distress_score < 0.70:
+    elif distress_score < 0.65:
         intensity = "high"
-    else:
+    elif distress_score < 0.85:
         intensity = "severe"
+    else:
+        intensity = "worst"
 
     return {
         "success": True,
@@ -517,10 +352,10 @@ def analyze_face(image: Image.Image) -> dict[str, Any]:
         "confidence": need_prediction["confidence"],
         "secondary_need": need_prediction["secondary_need"],
         "all_needs": need_prediction["all_needs"],
-        # Expression (from FER model)
-        "expression": expression["label"] if expression else None,
-        "expression_confidence": expression["score"] if expression else None,
-        # Top blendshape activations (for UI display)
-        "stress_features": top_features,
-        "faces_detected": len(result.face_landmarks),
+        # Expression (from DeepFace)
+        "expression": dominant_emotion,
+        "expression_confidence": dominant_conf,
+        # Top emotion activations (for UI display)
+        "stress_features": stress_features,
+        "faces_detected": len(results) if isinstance(results, list) else 1,
     }

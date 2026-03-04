@@ -25,8 +25,9 @@ dependencies = [
     "python-multipart>=0.0.6",
     "numpy>=1.24.0",
     "matplotlib>=3.8.0",
-    # Face analysis
-    "mediapipe>=0.10.0",
+    # Face analysis (DeepFace wraps RetinaFace + emotion classifier)
+    "deepface>=0.0.93",
+    "tf-keras>=2.16.0",
     "opencv-python>=4.8.0",
     # AI reports
     "langchain-core>=0.1.0",
