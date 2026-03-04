@@ -1,9 +1,7 @@
 """Database connection pool for Neon Postgres via psycopg v3."""
 
-import json
 import logging
 
-import psycopg
 import psycopg_pool
 from psycopg.rows import dict_row
 
@@ -124,16 +122,8 @@ def execute_values_returning(
     pool = get_pool()
     with pool.connection() as conn:
         with conn.cursor() as cur:
-            # Build VALUES clause
-            placeholders = ", ".join(
-                cur.mogrify("(" + ", ".join(["%s"] * len(v)) + ")", v).decode()
-                if isinstance(cur.mogrify("", ()), bytes)
-                else "(" + ", ".join(["%s"] * len(v)) + ")"
-                for v in values
-            )
             # Actually just use executemany or a single multi-row insert
             # psycopg v3 handles this well with execute + args_seq
-            from psycopg.sql import SQL
 
             # Simpler approach: build multi-row INSERT
             if not values:
