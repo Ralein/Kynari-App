@@ -9,7 +9,7 @@ from models.schemas import (
     NeedDailySummaryResponse,
 )
 from database import fetch_one, fetch_all, get_pool
-from services.baseline_engine import baseline_engine
+from services.baseline_engine import need_baseline_engine
 from services.summary_generator import summary_generator
 from collections import defaultdict
 from datetime import date
@@ -79,7 +79,7 @@ async def batch_create_events(
 
     # Trigger baseline recalculation in background
     background_tasks.add_task(
-        baseline_engine.ingest_events, body.child_id, body.events
+        need_baseline_engine.ingest_events, body.child_id, body.events
     )
 
     return BatchEventsResponse(

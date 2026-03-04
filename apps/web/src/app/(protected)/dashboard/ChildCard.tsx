@@ -51,7 +51,7 @@ export function ChildCard({ child }: ChildCardProps) {
     const gradientIndex = child.name.charCodeAt(0) % AVATAR_GRADIENTS.length;
     const avatarGradient = AVATAR_GRADIENTS[gradientIndex];
 
-    const dominantNeed = summary?.dominant_emotion as NeedLabel | undefined;
+    const dominantNeed = summary?.dominant_need as NeedLabel | undefined;
     const dominantEmoji = dominantNeed ? NEED_EMOJI[dominantNeed] : null;
 
     const handleDelete = async () => {

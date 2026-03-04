@@ -1,14 +1,13 @@
 "use client";
 
-import { EMOTION_EMOJI, type HourlyGroup, type EmotionLabel } from "@kynari/shared";
+import { NEED_EMOJI, type HourlyGroup, type NeedLabel } from "@kynari/shared";
 
-const SOFT_EMOTION_COLORS: Record<string, string> = {
-    happy: "#86efac",
-    sad: "#93c5fd",
-    angry: "#fca5a5",
-    fearful: "#c4b5fd",
-    neutral: "#cbd5e1",
-    frustrated: "#fdba74",
+const SOFT_NEED_COLORS: Record<string, string> = {
+    hungry: "#fdba74",
+    diaper: "#c4b5fd",
+    sleepy: "#93c5fd",
+    pain: "#fca5a5",
+    calm: "#86efac",
 };
 
 interface HourlyTimelineProps {
@@ -45,9 +44,9 @@ export function HourlyTimeline({ groups }: HourlyTimelineProps) {
             {hours.map((hour) => {
                 const group = groupMap.get(hour);
                 const hasData = !!group;
-                const emotion = group?.dominant_emotion as EmotionLabel | undefined;
-                const color = emotion ? SOFT_EMOTION_COLORS[emotion] : undefined;
-                const emoji = emotion ? EMOTION_EMOJI[emotion] : undefined;
+                const need = group?.dominant_need as NeedLabel | undefined;
+                const color = need ? SOFT_NEED_COLORS[need] : undefined;
+                const emoji = need ? NEED_EMOJI[need] : undefined;
                 const eventCount = group?.events.length ?? 0;
 
                 return (
@@ -71,7 +70,7 @@ export function HourlyTimeline({ groups }: HourlyTimelineProps) {
                             }
                             title={
                                 hasData
-                                    ? `${formatHour(hour)}: ${emotion} (${eventCount} events)`
+                                    ? `${formatHour(hour)}: ${need} (${eventCount} events)`
                                     : formatHour(hour)
                             }
                         >

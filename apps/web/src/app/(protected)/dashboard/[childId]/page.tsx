@@ -2,7 +2,7 @@
 
 import { use } from "react";
 import Link from "next/link";
-import { EMOTION_EMOJI } from "@kynari/shared";
+import { NEED_EMOJI, type NeedLabel } from "@kynari/shared";
 import {
     useChild,
     useTodaySummary,
@@ -39,8 +39,8 @@ export default function ChildReportPage({
         );
     }
 
-    const dominantEmoji = summary?.dominant_emotion
-        ? EMOTION_EMOJI[summary.dominant_emotion]
+    const dominantEmoji = summary?.dominant_need
+        ? NEED_EMOJI[summary.dominant_need]
         : null;
 
     return (
@@ -71,7 +71,7 @@ export default function ChildReportPage({
             <div className="card-soft p-5 flex items-center justify-between">
                 <div>
                     <h3 className="font-bold font-[family-name:var(--font-sans)]">
-                        Analyze {child?.name}&apos;s emotions
+                        Analyze {child?.name}&apos;s needs
                     </h3>
                     <p className="text-sm text-text-muted mt-0.5">
                         Scan face, record audio, or upload a file
@@ -100,20 +100,18 @@ export default function ChildReportPage({
 
                 {summary ? (
                     <div className="space-y-5">
-                        {/* Dominant emotion + insight */}
+                        {/* Dominant need + insight */}
                         <div className="flex items-start gap-4">
                             <div className="w-14 h-14 rounded-2xl bg-primary-50 flex items-center justify-center shrink-0">
                                 <span className="text-3xl">{dominantEmoji}</span>
                             </div>
                             <div>
                                 <div className="flex items-center gap-2 mb-1">
-                                    <span
-                                        className={`px-3 py-1 rounded-full text-sm font-semibold bg-emotion-${summary.dominant_emotion}/20`}
-                                    >
-                                        {summary.dominant_emotion}
+                                    <span className="px-3 py-1 rounded-full text-sm font-semibold bg-primary-100 text-primary-700 capitalize">
+                                        {summary.dominant_need}
                                     </span>
                                     <span className="text-xs text-text-muted">
-                                        Dominant today
+                                        Most frequent today
                                     </span>
                                 </div>
                                 <p className="text-sm text-text-secondary leading-relaxed">
@@ -122,23 +120,34 @@ export default function ChildReportPage({
                             </div>
                         </div>
 
-                        {/* Emotion distribution bar */}
+                        {/* Need distribution bar */}
                         <div>
                             <p className="text-xs text-text-muted mb-2">
-                                Emotion distribution ({summary.total_events} readings)
+                                Need distribution ({summary.total_events} readings)
                             </p>
                             <div className="flex rounded-full overflow-hidden h-3">
-                                {Object.entries(summary.emotion_distribution)
+                                {Object.entries(summary.need_distribution)
                                     .filter(([, pct]) => pct > 0)
                                     .sort(([, a], [, b]) => b - a)
-                                    .map(([emotion, pct]) => (
-                                        <div
-                                            key={emotion}
-                                            className={`bg-emotion-${emotion}`}
-                                            style={{ width: `${pct}%` }}
-                                            title={`${emotion}: ${pct}%`}
-                                        />
-                                    ))}
+                                    .map(([need, pct]) => {
+                                        const NEED_BAR_COLORS: Record<string, string> = {
+                                            hungry: "#FB923C",
+                                            diaper: "#A78BFA",
+                                            sleepy: "#60A5FA",
+                                            pain: "#F87171",
+                                            calm: "#34D399",
+                                        };
+                                        return (
+                                            <div
+                                                key={need}
+                                                style={{
+                                                    width: `${pct}%`,
+                                                    backgroundColor: NEED_BAR_COLORS[need] ?? "#9CA3AF",
+                                                }}
+                                                title={`${need}: ${pct}%`}
+                                            />
+                                        );
+                                    })}
                             </div>
                         </div>
 
@@ -173,17 +182,17 @@ export default function ChildReportPage({
 
             {/* Charts Grid */}
             <div className="grid lg:grid-cols-2 gap-5">
-                {/* Emotion Pie Chart */}
+                {/* Need Pie Chart */}
                 <div className="card-soft p-6 sm:p-8">
                     <div className="flex items-center gap-2 mb-4">
                         <PieChart className="w-4 h-4 text-primary-500" />
                         <h3 className="text-base font-bold font-[family-name:var(--font-sans)]">
-                            Emotion Breakdown
+                            Need Breakdown
                         </h3>
                     </div>
-                    {summary?.emotion_distribution ? (
+                    {summary?.need_distribution ? (
                         <EmotionPieChart
-                            distribution={summary.emotion_distribution}
+                            distribution={summary.need_distribution}
                         />
                     ) : (
                         <div className="flex items-center justify-center h-48 text-text-muted text-sm">
