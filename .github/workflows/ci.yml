@@ -33,8 +33,6 @@ jobs:
 
       - name: Build
         run: pnpm build
-        env:
-          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY }}
 
       - name: Test
         run: pnpm test
