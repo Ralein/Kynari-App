@@ -2,7 +2,7 @@
 
 import { use } from "react";
 import Link from "next/link";
-import { NEED_EMOJI, type NeedLabel } from "@kynari/shared";
+import { NEED_EMOJI } from "@kynari/shared";
 import {
     useChild,
     useTodaySummary,

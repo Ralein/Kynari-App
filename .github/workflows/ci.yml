@@ -53,7 +53,7 @@ jobs:
 
       - name: Install API dependencies
         working-directory: packages/api
-        run: uv sync
+        run: uv sync --all-extras
 
       - name: Lint API
         working-directory: packages/api
