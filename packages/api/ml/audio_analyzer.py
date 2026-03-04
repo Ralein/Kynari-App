@@ -79,19 +79,20 @@ NEED_LABELS = ["hungry", "diaper", "sleepy", "pain", "calm"]
 # ─── Model loading ───────────────────────────────────────────
 
 def _load_cry_classifier():
-    """Lazy-load the Wav2Vec2 baby cry classification pipeline.
+    """Lazy-load the baby cry classification pipeline.
 
-    Uses Wav2Vec2 Large XLSR-53 fine-tuned on baby cry data.
-    Falls back to the lighter foduucom model if Wav2Vec2 fails to load.
+    Uses the fast CNN model as primary (foduucom — <1s inference on CPU).
+    The acoustic heuristics ensemble compensates for accuracy.
+    Falls back to Wav2Vec2 XLSR-53 if CNN is unavailable.
     """
     global _cry_classifier
     if _cry_classifier is not None:
         return _cry_classifier
 
-    # Primary: Wav2Vec2 XLSR-53 (higher accuracy)
+    # Primary: fast CNN model (~1-2s); Fallback: Wav2Vec2 (~8-15s but more accurate)
     models_to_try = [
-        "Wiam/baby-cry-classification-finetuned-babycry-v4",
-        "foduucom/baby-cry-classification",  # fallback
+        "foduucom/baby-cry-classification",                         # Fast CNN
+        "Wiam/baby-cry-classification-finetuned-babycry-v4",        # Slow but accurate
     ]
 
     for model_name in models_to_try:
