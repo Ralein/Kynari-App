@@ -37,7 +37,7 @@ export default function LoginPage() {
                         </span>
                     </Link>
                     <p className="text-slate-500 text-sm mt-3">
-                        Your child&apos;s emotional world 💜
+                        Your child&apos;s emotional world 
                     </p>
                 </div>
 

@@ -933,7 +933,7 @@ export default function AnalyzePage() {
                         )}
                         {feedbackGiven && (
                             <div className="mb-5 pb-5 border-b border-[#EAE2FB]/50 text-center">
-                                <p className="text-sm text-slate-500">Thanks for the feedback! This helps Kynari learn. 💜</p>
+                                <p className="text-sm text-slate-500">Thanks for the feedback! This helps Kynari learn.</p>
                             </div>
                         )}
 
