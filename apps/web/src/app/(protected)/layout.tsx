@@ -31,11 +31,8 @@ export default async function ProtectedLayout({
             {/* ─── Top Navigation ──────────────────────────── */}
             <header className="sticky top-0 z-50 bg-white/60 backdrop-blur-md border-b border-white/80 shadow-[0_-10px_40px_rgba(0,0,0,0.03)]">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16">
-                    <Link href="/dashboard" className="flex items-center gap-2">
-                        <Image src="/logo1.png" alt="Kynari" width={32} height={32} className="w-8 h-8 rounded-xl object-cover drop-shadow-sm" priority />
-                        <span className="text-lg font-bold tracking-tight text-[#1a1b2e] font-[family-name:var(--font-sans)]">
-                            kynari
-                        </span>
+                    <Link href="/dashboard" className="flex items-center">
+                        <Image src="/logo1.png" alt="Kynari" width={56} height={56} className="w-14 h-14 rounded-2xl object-cover drop-shadow-sm" priority />
                     </Link>
 
                     {/* Desktop Nav */}

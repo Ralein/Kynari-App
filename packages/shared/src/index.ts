@@ -173,7 +173,7 @@ export const NEED_ADVICE: Record<NeedLabel, { title: string; icon: string; low: 
         icon: "😌",
         low: "Your baby is content! Great time for tummy time or gentle play.",
         medium: "Your baby seems relaxed. May need burping if fed recently.",
-        high: "Your baby is very calm and settled. Enjoy the moment! 💜",
+        high: "Your baby is very calm and settled. Enjoy the moment!",
     },
 };
 
