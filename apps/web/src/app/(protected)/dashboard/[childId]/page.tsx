@@ -33,8 +33,8 @@ export default function ChildReportPage({
     if (childLoading) {
         return (
             <div className="animate-fade-in space-y-6">
-                <div className="h-8 w-48 bg-primary-100 rounded-lg animate-pulse" />
-                <div className="card-soft p-8 h-64 animate-pulse" />
+                <div className="h-8 w-48 bg-slate-200 rounded-lg animate-pulse" />
+                <div className="bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-8 h-64 animate-pulse" />
             </div>
         );
     }
@@ -44,17 +44,17 @@ export default function ChildReportPage({
         : null;
 
     return (
-        <div className="animate-fade-in space-y-5">
+        <div className="animate-fade-in space-y-6 max-w-5xl mx-auto">
             {/* Breadcrumb */}
-            <div className="flex items-center gap-1.5 text-sm text-text-muted">
+            <div className="flex items-center gap-1.5 text-sm text-slate-500 font-medium">
                 <Link
                     href="/dashboard"
-                    className="hover:text-primary-600 transition-colors"
+                    className="hover:text-[#1a1b2e] transition-colors"
                 >
                     Dashboard
                 </Link>
                 <ChevronRight className="w-3.5 h-3.5" />
-                <span className="text-text-primary font-semibold">
+                <span className="text-[#1a1b2e] font-semibold">
                     {child?.name ?? "Child Report"}
                 </span>
             </div>
@@ -68,18 +68,18 @@ export default function ChildReportPage({
             )}
 
             {/* Analyze CTA */}
-            <div className="card-soft p-5 flex items-center justify-between">
+            <div className="bg-gradient-to-br from-[#EAE2FB]/60 to-[#FCECD8]/60 border border-white/80 backdrop-blur-sm shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h3 className="font-bold font-[family-name:var(--font-sans)]">
+                    <h3 className="text-xl font-bold font-[family-name:var(--font-sans)] text-[#1a1b2e]">
                         Analyze {child?.name}&apos;s needs
                     </h3>
-                    <p className="text-sm text-text-muted mt-0.5">
+                    <p className="text-sm text-[#4a4b5e] mt-1">
                         Scan face, record audio, or upload a file
                     </p>
                 </div>
                 <Link
                     href="/analyze"
-                    className="btn-primary shrink-0"
+                    className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-gradient-to-r from-[#F0897A] to-[#EFA192] text-white font-medium hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 shadow-[0_8px_20px_-6px_rgba(240,137,122,0.5)] shrink-0 gap-2"
                 >
                     <Search className="w-4 h-4" />
                     Analyze Now
@@ -87,55 +87,55 @@ export default function ChildReportPage({
             </div>
 
             {/* Today's Summary Card */}
-            <div className="card-soft p-6 sm:p-8">
-                <div className="flex items-center gap-2 mb-5">
-                    <BarChart3 className="w-4.5 h-4.5 text-primary-500" />
-                    <h2 className="text-lg font-bold font-[family-name:var(--font-sans)]">
+            <div className="bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-6 sm:p-8">
+                <div className="flex items-center gap-2 mb-6">
+                    <BarChart3 className="w-5 h-5 text-[#F0897A]" />
+                    <h2 className="text-xl font-bold font-[family-name:var(--font-sans)] text-[#1a1b2e]">
                         Today&apos;s Summary
                     </h2>
-                    <span className="text-xs text-text-muted px-2 py-0.5 bg-primary-50 rounded-full ml-auto">
+                    <span className="text-xs text-[#6B48C8] px-3 py-1 bg-[#EAE2FB] rounded-full font-medium ml-auto">
                         {today}
                     </span>
                 </div>
 
                 {summary ? (
-                    <div className="space-y-5">
+                    <div className="space-y-6">
                         {/* Dominant need + insight */}
                         <div className="flex items-start gap-4">
-                            <div className="w-14 h-14 rounded-2xl bg-primary-50 flex items-center justify-center shrink-0">
-                                <span className="text-3xl">{dominantEmoji}</span>
+                            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#FCECD8] to-[#F1D7B4] flex items-center justify-center shrink-0 shadow-sm">
+                                <span className="text-4xl">{dominantEmoji}</span>
                             </div>
                             <div>
-                                <div className="flex items-center gap-2 mb-1">
-                                    <span className="px-3 py-1 rounded-full text-sm font-semibold bg-primary-100 text-primary-700 capitalize">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="px-3 py-1 rounded-full text-sm font-semibold bg-[#F0897A]/10 text-[#F0897A] capitalize">
                                         {summary.dominant_need}
                                     </span>
-                                    <span className="text-xs text-text-muted">
+                                    <span className="text-xs text-slate-500 font-medium">
                                         Most frequent today
                                     </span>
                                 </div>
-                                <p className="text-sm text-text-secondary leading-relaxed">
+                                <p className="text-[15px] text-[#4a4b5e] leading-relaxed">
                                     {summary.insight_text}
                                 </p>
                             </div>
                         </div>
 
                         {/* Need distribution bar */}
-                        <div>
-                            <p className="text-xs text-text-muted mb-2">
+                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                            <p className="text-xs text-slate-500 font-medium mb-3">
                                 Need distribution ({summary.total_events} readings)
                             </p>
-                            <div className="flex rounded-full overflow-hidden h-3">
+                            <div className="flex rounded-full overflow-hidden h-3.5 mb-2">
                                 {Object.entries(summary.need_distribution)
                                     .filter(([, pct]) => pct > 0)
                                     .sort(([, a], [, b]) => b - a)
                                     .map(([need, pct]) => {
                                         const NEED_BAR_COLORS: Record<string, string> = {
-                                            hungry: "#FB923C",
-                                            diaper: "#A78BFA",
-                                            sleepy: "#60A5FA",
-                                            pain: "#F87171",
-                                            calm: "#34D399",
+                                            hungry: "#F3A595", // Peach/orange tint
+                                            diaper: "#93E2FA", // Light blue tint
+                                            sleepy: "#D4D6DC", // Soft gray/purple tint
+                                            pain: "#F0897A", // Stronger red/peach tint
+                                            calm: "#B5EAC5", // Mint green tint
                                         };
                                         return (
                                             <div
@@ -153,12 +153,12 @@ export default function ChildReportPage({
 
                         {/* Baseline deviation indicator */}
                         {summary.baseline_deviation !== null && (
-                            <div className="text-xs text-text-muted">
+                            <div className="text-xs text-slate-500 font-medium">
                                 Baseline deviation:{" "}
                                 <span
                                     className={`font-semibold ${Math.abs(summary.baseline_deviation) > 1.5
-                                        ? "text-blush"
-                                        : "text-primary-600"
+                                        ? "text-[#F0897A]"
+                                        : "text-[#6B48C8]"
                                         }`}
                                 >
                                     {summary.baseline_deviation > 0 ? "+" : ""}
@@ -168,11 +168,11 @@ export default function ChildReportPage({
                         )}
                     </div>
                 ) : (
-                    <div className="text-center py-8">
-                        <div className="w-16 h-16 rounded-2xl bg-primary-50 flex items-center justify-center mx-auto mb-4">
-                            <BarChart3 className="w-8 h-8 text-primary-300" />
+                    <div className="text-center py-10">
+                        <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-[#EAE2FB] to-[#FCECD8] flex items-center justify-center mx-auto mb-5 shadow-sm">
+                            <BarChart3 className="w-10 h-10 text-[#6B48C8]/60" />
                         </div>
-                        <p className="text-text-secondary text-sm">
+                        <p className="text-[#4a4b5e] text-sm max-w-sm mx-auto">
                             No data recorded today yet. Start a monitoring session to
                             see results here.
                         </p>
@@ -181,12 +181,12 @@ export default function ChildReportPage({
             </div>
 
             {/* Charts Grid */}
-            <div className="grid lg:grid-cols-2 gap-5">
+            <div className="grid lg:grid-cols-2 gap-6">
                 {/* Need Pie Chart */}
-                <div className="card-soft p-6 sm:p-8">
-                    <div className="flex items-center gap-2 mb-4">
-                        <PieChart className="w-4 h-4 text-primary-500" />
-                        <h3 className="text-base font-bold font-[family-name:var(--font-sans)]">
+                <div className="bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-6 sm:p-8">
+                    <div className="flex items-center gap-2 mb-6">
+                        <PieChart className="w-5 h-5 text-[#93E2FA]" />
+                        <h3 className="text-lg font-bold font-[family-name:var(--font-sans)] text-[#1a1b2e]">
                             Need Breakdown
                         </h3>
                     </div>
@@ -195,17 +195,17 @@ export default function ChildReportPage({
                             distribution={summary.need_distribution}
                         />
                     ) : (
-                        <div className="flex items-center justify-center h-48 text-text-muted text-sm">
+                        <div className="flex items-center justify-center h-48 text-slate-400 text-sm font-medium">
                             Awaiting today&apos;s data
                         </div>
                     )}
                 </div>
 
                 {/* 7-Day Trend */}
-                <div className="card-soft p-6 sm:p-8">
-                    <div className="flex items-center gap-2 mb-4">
-                        <TrendingUp className="w-4 h-4 text-primary-500" />
-                        <h3 className="text-base font-bold font-[family-name:var(--font-sans)]">
+                <div className="bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-6 sm:p-8">
+                    <div className="flex items-center gap-2 mb-6">
+                        <TrendingUp className="w-5 h-5 text-[#B5EAC5]" />
+                        <h3 className="text-lg font-bold font-[family-name:var(--font-sans)] text-[#1a1b2e]">
                             7-Day Trend
                         </h3>
                     </div>
@@ -214,10 +214,10 @@ export default function ChildReportPage({
             </div>
 
             {/* Hourly Timeline */}
-            <div className="card-soft p-6 sm:p-8">
-                <div className="flex items-center gap-2 mb-4">
-                    <Clock className="w-4 h-4 text-primary-500" />
-                    <h3 className="text-base font-bold font-[family-name:var(--font-sans)]">
+            <div className="bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-6 sm:p-8">
+                <div className="flex items-center gap-2 mb-6">
+                    <Clock className="w-5 h-5 text-[#EAE2FB]" />
+                    <h3 className="text-lg font-bold font-[family-name:var(--font-sans)] text-[#1a1b2e]">
                         Today&apos;s Timeline
                     </h3>
                 </div>

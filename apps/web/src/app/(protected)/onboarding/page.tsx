@@ -11,7 +11,7 @@ export default function OnboardingPage() {
                         <div
                             key={step}
                             className={`h-2.5 rounded-full transition-all ${step === 1
-                                ? "bg-primary-500 w-8"
+                                ? "bg-[#EAE2FB] w-8"
                                 : "bg-primary-200"
                                 } ${step > 1 ? "w-2.5" : ""}`}
                         />
@@ -43,46 +43,46 @@ export default function OnboardingPage() {
                         Welcome to Kynari
                     </h1>
 
-                    <p className="text-text-secondary text-lg leading-relaxed mb-4">
+                    <p className="text-[#4a4b5e] text-lg leading-relaxed mb-4">
                         Your child&apos;s emotional world, made visible.
                     </p>
 
-                    <p className="text-text-muted text-sm leading-relaxed max-w-sm mx-auto mb-10">
+                    <p className="text-slate-500 text-sm leading-relaxed max-w-sm mx-auto mb-10">
                         Kynari listens for emotional tone — not words. Like a smart baby
                         monitor for feelings. All AI runs on your device.
                     </p>
 
                     {/* Privacy Assurance Cards */}
                     <div className="grid gap-3 text-left mb-10">
-                        <div className="card-soft rounded-xl p-4 flex items-start gap-3">
-                            <div className="w-9 h-9 rounded-lg bg-primary-100 flex items-center justify-center shrink-0">
-                                <Mic className="w-4 h-4 text-primary-600" />
+                        <div className="bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-4 flex items-start gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-slate-200 flex items-center justify-center shrink-0">
+                                <Mic className="w-4 h-4 text-[#6B48C8]" />
                             </div>
                             <div>
                                 <p className="text-sm font-bold">We listen for tone</p>
-                                <p className="text-xs text-text-muted">
+                                <p className="text-xs text-slate-500">
                                     Emotional prosody detection — pitch, rhythm, energy
                                 </p>
                             </div>
                         </div>
-                        <div className="card-soft rounded-xl p-4 flex items-start gap-3">
-                            <div className="w-9 h-9 rounded-lg bg-primary-100 flex items-center justify-center shrink-0">
-                                <Brain className="w-4 h-4 text-primary-600" />
+                        <div className="bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-4 flex items-start gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-slate-200 flex items-center justify-center shrink-0">
+                                <Brain className="w-4 h-4 text-[#6B48C8]" />
                             </div>
                             <div>
-                                <p className="text-sm font-bold">AI runs on your phone</p>
-                                <p className="text-xs text-text-muted">
+                                <p className="text-sm font-bold">AI runs on your device</p>
+                                <p className="text-xs text-slate-500">
                                     No audio ever leaves your device. Ever.
                                 </p>
                             </div>
                         </div>
-                        <div className="card-soft rounded-xl p-4 flex items-start gap-3">
-                            <div className="w-9 h-9 rounded-lg bg-primary-100 flex items-center justify-center shrink-0">
-                                <BarChart3 className="w-4 h-4 text-primary-600" />
+                        <div className="bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-4 flex items-start gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-slate-200 flex items-center justify-center shrink-0">
+                                <BarChart3 className="w-4 h-4 text-[#6B48C8]" />
                             </div>
                             <div>
                                 <p className="text-sm font-bold">Only labels reach us</p>
-                                <p className="text-xs text-text-muted">
+                                <p className="text-xs text-slate-500">
                                     Tiny data: emotion label + confidence + timestamp
                                 </p>
                             </div>
@@ -91,7 +91,7 @@ export default function OnboardingPage() {
 
                     <Link
                         href="/onboarding/add-child"
-                        className="btn-primary text-base px-8 py-3.5"
+                        className="inline-flex items-center justify-center px-8 py-3.5 rounded-full bg-gradient-to-r from-[#F0897A] to-[#EFA192] text-white font-medium hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 shadow-[0_8px_20px_-6px_rgba(240,137,122,0.5)] gap-2 text-base"
                     >
                         Continue
                         <ArrowRight className="w-4 h-4" />

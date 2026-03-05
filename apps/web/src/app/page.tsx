@@ -48,8 +48,9 @@ export default function LandingPage() {
 
       {/* ─── Navigation ──────────────────────────────────── */}
       <nav className="relative z-10 flex items-center justify-between px-6 py-5 md:px-12 lg:px-20 max-w-[1400px] mx-auto animate-fade-in">
-        <div className="flex items-center">
+        <div className="flex items-center gap-3">
           <Image src="/logo1.png" alt="Kynari" width={56} height={56} className="w-14 h-14 rounded-2xl object-cover drop-shadow-sm" priority />
+          <span className="text-[22px] font-bold tracking-tight text-[#1a1b2e]">kynari</span>
         </div>
         <div className="flex items-center gap-4">
           <Link href="/login" className="text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors">
