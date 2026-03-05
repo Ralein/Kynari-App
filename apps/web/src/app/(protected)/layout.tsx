@@ -10,7 +10,12 @@ export default async function ProtectedLayout({
 }: {
     children: React.ReactNode;
 }) {
-    const user = await currentUser();
+    let user;
+    try {
+        user = await currentUser();
+    } catch (error) {
+        console.error("Clerk currentUser() error:", error);
+    }
 
     if (!user) {
         redirect("/login");
