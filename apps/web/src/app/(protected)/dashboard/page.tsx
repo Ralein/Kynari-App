@@ -29,7 +29,6 @@ export default function DashboardPage() {
                         Here&apos;s how your little ones are doing today.
                     </p>
                 </div>
-                
             </div>
 
             {/* Loading State */}
@@ -77,7 +76,10 @@ export default function DashboardPage() {
                     >
                         Get Started
                     </Link>
+                     
+                    
                 </div>
+                
             )}
 
             {/* Child Cards */}
@@ -102,6 +104,7 @@ export default function DashboardPage() {
                         </span>
                     </Link>
                 </div>
+                
             )}
         </div>
     );

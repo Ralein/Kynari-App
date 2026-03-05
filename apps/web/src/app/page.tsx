@@ -160,7 +160,7 @@ export default function LandingPage() {
               <div className="relative flex-1 flex items-center justify-center -mt-8">
                 <div className="relative w-40 h-40 rounded-full z-20 shadow-[0_8px_30px_rgba(0,0,0,0.08)] bg-white overflow-hidden border-2 border-white/50">
                   <video
-                    src="/bg_removed_Video_Generation_With_White_Background.mp4.mp4"
+                    src="/video.mp4"
                     autoPlay loop muted playsInline
                     className="w-full h-full object-cover scale-[1.02]"
                   />

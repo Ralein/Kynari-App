@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Mic, Brain, BarChart3, ArrowRight } from "lucide-react";
+import { Mic, Brain, BarChart3, ArrowRight, Sparkle } from "lucide-react";
+import { LuSparkles } from "react-icons/lu";
 
 export default function OnboardingPage() {
     return (
@@ -23,19 +24,10 @@ export default function OnboardingPage() {
                     {/* Cute illustration */}
                     <div className="relative w-28 h-28 mx-auto mb-8">
                         <div className="w-28 h-28 rounded-full bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center">
-                            <svg viewBox="0 0 80 80" className="w-16 h-16" aria-hidden="true">
-                                <circle cx="40" cy="35" r="22" fill="#fff1f5" />
-                                <ellipse cx="33" cy="32" rx="3" ry="3.5" fill="#1e1b2e" />
-                                <ellipse cx="47" cy="32" rx="3" ry="3.5" fill="#1e1b2e" />
-                                <circle cx="34.5" cy="30.5" r="1.2" fill="white" />
-                                <circle cx="48.5" cy="30.5" r="1.2" fill="white" />
-                                <path d="M35 42 Q40 48 45 42" stroke="#e879a0" strokeWidth="2" fill="none" strokeLinecap="round" />
-                                <circle cx="27" cy="38" r="4" fill="#fda4af" opacity="0.35" />
-                                <circle cx="53" cy="38" r="4" fill="#fda4af" opacity="0.35" />
-                            </svg>
                         </div>
+
                         <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-peach flex items-center justify-center animate-bounce-gentle">
-                            <span className="text-xs">✨</span>
+                            <span className="text-xs"><LuSparkles className="w-4 h-4 text-white" /></span>
                         </div>
                     </div>
 
