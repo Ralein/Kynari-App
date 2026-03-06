@@ -15,7 +15,7 @@ import { NEED_EMOJI, NEED_COLORS, NEED_ADVICE, DISTRESS_SCALE, type NeedLabel } 
 import {
     Camera, Mic, Upload, ChevronRight, Save, CheckCircle2,
     AlertCircle, Stethoscope, Lightbulb, Volume2, ThumbsUp, ThumbsDown,
-    Search, Baby, Brain, Scan, BarChart2, Target, Wifi, WifiOff,
+    Search, Baby, Brain, Scan, BarChart2, Target, WifiOff,
     Smile, Frown, Meh, Angry, Laugh, Annoyed, Flame,
     Link2, Radio, ScanFace, FileStack, RefreshCcw,
 } from "lucide-react";
@@ -55,24 +55,24 @@ function getDistressInfo(level: number) {
 // ─── Expression → Lucide icon map ───────────────────────────
 function ExpressionIcon({ expression, className }: { expression: string; className?: string }) {
     const map: Record<string, React.ReactNode> = {
-        happy:    <Laugh   className={className} />,
-        sad:      <Frown   className={className} />,
-        angry:    <Angry   className={className} />,
-        fear:     <Annoyed className={className} />,
-        disgust:  <Flame   className={className} />,
-        surprise: <Smile   className={className} />,
-        neutral:  <Meh     className={className} />,
+        happy: <Laugh className={className} />,
+        sad: <Frown className={className} />,
+        angry: <Angry className={className} />,
+        fear: <Annoyed className={className} />,
+        disgust: <Flame className={className} />,
+        surprise: <Smile className={className} />,
+        neutral: <Meh className={className} />,
     };
     return <>{map[expression] ?? <Meh className={className} />}</>;
 }
 
 // ─── Analysis phase config ───────────────────────────────────
 const ANALYSIS_PHASES: { label: string; Icon: React.FC<{ className?: string }> }[] = [
-    { label: "Detecting face landmarks…",  Icon: ({ className }) => <Search    className={className} /> },
-    { label: "Running neural network…",    Icon: ({ className }) => <Brain     className={className} /> },
-    { label: "Classifying expression…",   Icon: ({ className }) => <ScanFace  className={className} /> },
-    { label: "Mapping action units…",      Icon: ({ className }) => <Scan      className={className} /> },
-    { label: "Predicting baby needs…",     Icon: ({ className }) => <Target    className={className} /> },
+    { label: "Detecting face landmarks…", Icon: ({ className }) => <Search className={className} /> },
+    { label: "Running neural network…", Icon: ({ className }) => <Brain className={className} /> },
+    { label: "Classifying expression…", Icon: ({ className }) => <ScanFace className={className} /> },
+    { label: "Mapping action units…", Icon: ({ className }) => <Scan className={className} /> },
+    { label: "Predicting baby needs…", Icon: ({ className }) => <Target className={className} /> },
 ];
 
 function AnalyzingOverlay() {
@@ -125,11 +125,10 @@ function AnalyzingOverlay() {
                     {ANALYSIS_PHASES.map((_, i) => (
                         <div
                             key={i}
-                            className={`h-2 rounded-full transition-all duration-500 ${
-                                i <= phaseIndex
+                            className={`h-2 rounded-full transition-all duration-500 ${i <= phaseIndex
                                     ? "w-6 bg-gradient-to-r from-primary-500 to-primary-400"
                                     : "w-2 bg-[#EAE2FB]/60"
-                            }`}
+                                }`}
                         />
                     ))}
                 </div>
@@ -175,15 +174,15 @@ export default function AnalyzePage() {
     }, [children, selectedChild]);
 
     const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
-        { key: "camera", label: "Scan Face",      icon: <Camera className="w-4 h-4" /> },
-        { key: "audio",  label: "Record Audio",   icon: <Mic    className="w-4 h-4" /> },
-        { key: "upload", label: "Upload File",    icon: <Upload className="w-4 h-4" /> },
+        { key: "camera", label: "Scan Face", icon: <Camera className="w-4 h-4" /> },
+        { key: "audio", label: "Record Audio", icon: <Mic className="w-4 h-4" /> },
+        { key: "upload", label: "Upload File", icon: <Upload className="w-4 h-4" /> },
     ];
 
     // ─── Camera ─────────────────────────────────────────────
-    const videoRef   = useRef<HTMLVideoElement>(null);
-    const canvasRef  = useRef<HTMLCanvasElement>(null);
-    const streamRef  = useRef<MediaStream | null>(null);
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const streamRef = useRef<MediaStream | null>(null);
     const [cameraActive, setCameraActive] = useState(false);
 
     const startCamera = useCallback(async () => {
@@ -208,8 +207,8 @@ export default function AnalyzePage() {
         if (!videoRef.current || !canvasRef.current || !token) return;
         setIsAnalyzing(true); setResult(null); setError(null); setSaved(false); setFeedbackGiven(false);
         const canvas = canvasRef.current;
-        const video  = videoRef.current;
-        canvas.width  = video.videoWidth;
+        const video = videoRef.current;
+        canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         canvas.getContext("2d")?.drawImage(video, 0, 0);
         canvas.toBlob(async (blob) => {
@@ -227,17 +226,17 @@ export default function AnalyzePage() {
 
     // ─── Audio ──────────────────────────────────────────────
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-    const audioChunksRef   = useRef<Blob[]>([]);
-    const [isRecording, setIsRecording]     = useState(false);
+    const audioChunksRef = useRef<Blob[]>([]);
+    const [isRecording, setIsRecording] = useState(false);
     const [recordingTime, setRecordingTime] = useState(0);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
 
     const startRecording = useCallback(async () => {
         try {
-            const stream       = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const mediaRecorder = new MediaRecorder(stream);
             mediaRecorderRef.current = mediaRecorder;
-            audioChunksRef.current   = [];
+            audioChunksRef.current = [];
             mediaRecorder.ondataavailable = (e) => audioChunksRef.current.push(e.data);
             mediaRecorder.onstop = async () => {
                 stream.getTracks().forEach(t => t.stop());
@@ -299,7 +298,7 @@ export default function AnalyzePage() {
     // ─── Save ────────────────────────────────────────────────
     const handleSave = useCallback(async () => {
         if (!result || !token || !selectedChild) return;
-        const needLabel  = result.need_label || (result.distress_score !== undefined ? (result.distress_score > 0.5 ? "pain" : "calm") : "calm");
+        const needLabel = result.need_label || (result.distress_score !== undefined ? (result.distress_score > 0.5 ? "pain" : "calm") : "calm");
         const confidence = result.confidence ?? result.distress_score ?? 0;
         try {
             const res = await saveAnalysisResult(token, { child_id: selectedChild, need_label: needLabel, confidence, modality: result.type === "face" ? "face" : result.type === "audio" ? "voice" : "combined", secondary_need: result.secondary_need, all_needs: result.all_needs, face_distress_score: result.distress_score, raw_result: result.raw });
@@ -312,12 +311,12 @@ export default function AnalyzePage() {
     }, [stopCamera]);
 
     // ─── Computed values ─────────────────────────────────────
-    const primaryScore  = result?.confidence ?? result?.distress_score ?? 0;
-    const severity      = getSeverity(primaryScore);
+    const primaryScore = result?.confidence ?? result?.distress_score ?? 0;
+    const severity = getSeverity(primaryScore);
     const distressLevel = getDistressLevel(result?.distress_score ?? primaryScore);
-    const distressInfo  = getDistressInfo(distressLevel);
-    const needKey       = (result?.need_label || (result?.distress_score !== undefined ? (result.distress_score > 0.5 ? "pain" : "calm") : "calm")) as NeedLabel;
-    const advice        = NEED_ADVICE[needKey];
+    const distressInfo = getDistressInfo(distressLevel);
+    const needKey = (result?.need_label || (result?.distress_score !== undefined ? (result.distress_score > 0.5 ? "pain" : "calm") : "calm")) as NeedLabel;
+    const advice = NEED_ADVICE[needKey];
 
     // ─── Error type helpers ───────────────────────────────────
     function getErrorMeta(err: string): { icon: React.ReactNode; title: string; tips: string[] } {
@@ -554,7 +553,7 @@ export default function AnalyzePage() {
                             </p>
                             <div className="space-y-3">
                                 {Object.entries(result.all_needs).sort(([, a], [, b]) => b - a).map(([label, score]) => {
-                                    const pct   = Math.round(score * 100);
+                                    const pct = Math.round(score * 100);
                                     const color = NEED_COLORS[label as NeedLabel] || "#9CA3AF";
                                     const emoji = NEED_EMOJI[label as NeedLabel] || "";
                                     const isTop = label === result.need_label;

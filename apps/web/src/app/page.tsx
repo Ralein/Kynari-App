@@ -3,7 +3,6 @@ import Link from "next/link";
 import {
   RiCloudOffLine,
   RiCpuLine,
-  RiLockLine,
   RiArrowRightLine,
   RiBellLine,
   RiHome4Fill,
@@ -110,9 +109,9 @@ export default function LandingPage() {
             <div className="animate-fade-in-delay-3 grid grid-cols-4 gap-5 max-w-sm">
               {[
                 { icon: RiCloudOffLine, label: "NO CLOUD\nSTORAGE" },
-                { icon: RiCpuLine,      label: "ON-DEVICE\nPROCESSING" },
+                { icon: RiCpuLine, label: "ON-DEVICE\nPROCESSING" },
                 { icon: RiShieldKeyholeLine, label: "END-TO-END\nENCRYPTED" },
-                { icon: RiHeartPulseLine,   label: "BUILT FOR\nFAMILIES" },
+                { icon: RiHeartPulseLine, label: "BUILT FOR\nFAMILIES" },
               ].map(({ icon: Icon, label }) => (
                 <div key={label} className="flex flex-col items-center gap-2.5 group">
                   <div className="w-13 h-13 w-[52px] h-[52px] rounded-2xl bg-white shadow-[0_4px_20px_-4px_rgba(0,0,0,0.08)] flex items-center justify-center text-slate-600 group-hover:scale-110 group-hover:shadow-[0_6px_24px_-4px_rgba(240,137,122,0.2)] transition-all duration-300">
@@ -345,9 +344,9 @@ export default function LandingPage() {
         <section className="py-16 text-center">
           <div className="flex flex-wrap justify-center gap-6 text-sm text-slate-400">
             {[
-              { icon: RiVolumeMuteLine,    label: "Zero audio storage" },
-              { icon: RiBrainLine,         label: "On-device AI" },
-              { icon: RiShieldLine,        label: "COPPA compliant" },
+              { icon: RiVolumeMuteLine, label: "Zero audio storage" },
+              { icon: RiBrainLine, label: "On-device AI" },
+              { icon: RiShieldLine, label: "COPPA compliant" },
               { icon: RiShieldKeyholeLine, label: "End-to-end encrypted" },
             ].map(({ icon: Icon, label }) => (
               <span key={label} className="flex items-center gap-2">
