@@ -92,7 +92,7 @@ export async function getBaselineStatus(
 
 // ─── Events API ─────────────────────────────────────────────
 
-import type { EmotionEvent, HourlyGroup } from "@kynari/shared";
+import type { HourlyGroup } from "@kynari/shared";
 
 export async function getTimeline(
     token: string,
