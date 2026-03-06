@@ -19,21 +19,26 @@ export default function OnboardingDonePage() {
                 </div>
 
                 {/* Celebration */}
-                <div className="relative w-28 h-28 mx-auto mb-8">
-                    <div className="w-28 h-28 rounded-full bg-gradient-to-br from-mint/30 to-primary-200 flex items-center justify-center">
-                        <svg viewBox="0 0 80 80" className="w-16 h-16" aria-hidden="true">
-                            <circle cx="40" cy="35" r="22" fill="#fff1f5" />
-                            <ellipse cx="33" cy="30" rx="3.5" ry="2" fill="#1e1b2e" />
-                            <ellipse cx="47" cy="30" rx="3.5" ry="2" fill="#1e1b2e" />
-                            <path d="M32 40 Q40 50 48 40" stroke="#e879a0" strokeWidth="2.5" fill="none" strokeLinecap="round" />
-                            <circle cx="26" cy="36" r="4" fill="#fda4af" opacity="0.35" />
-                            <circle cx="54" cy="36" r="4" fill="#fda4af" opacity="0.35" />
-                        </svg>
+                <div className="relative w-32 h-32 mx-auto mb-8 group">
+                    {/* Glow effect behind the circle */}
+                    <div className="absolute inset-0 bg-primary-200 rounded-full blur-[20px] opacity-60 group-hover:opacity-100 group-hover:blur-[25px] transition-all duration-700"></div>
+
+                    {/* Video Container */}
+                    <div className="relative w-32 h-32 rounded-full overflow-hidden flex items-center justify-center border-[5px] border-white ring-[5px] ring-primary-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.12)] bg-white transition-all duration-500 ease-out group-hover:scale-105 group-hover:ring-primary-200 z-10">
+                        <video
+                            src="/video.mp4"
+                            autoPlay
+                            loop
+                            muted
+                            playsInline
+                            className="w-full h-full object-cover hover:scale-110 transition-transform duration-700"
+                        />
                     </div>
+
                     {/* Confetti dots */}
-                    <div className="absolute -top-2 -right-1 w-3 h-3 bg-peach rounded-full animate-bounce-gentle" />
-                    <div className="absolute -bottom-1 -left-2 w-2.5 h-2.5 bg-primary-400 rounded-full animate-bounce-gentle" style={{ animationDelay: "0.5s" }} />
-                    <div className="absolute top-0 -left-4 w-2 h-2 bg-mint rounded-full animate-bounce-gentle" style={{ animationDelay: "1s" }} />
+                    <div className="absolute -top-2 -right-1 w-3 h-3 bg-peach rounded-full z-20 animate-bounce-gentle transition-transform duration-500 group-hover:rotate-12" />
+                    <div className="absolute -bottom-1 -left-2 w-2.5 h-2.5 bg-primary-400 rounded-full z-20 animate-bounce-gentle transition-transform duration-500 group-hover:-rotate-12" style={{ animationDelay: "0.5s" }} />
+                    <div className="absolute top-0 -left-4 w-2 h-2 bg-mint rounded-full z-20 animate-bounce-gentle transition-transform duration-500 group-hover:scale-110" style={{ animationDelay: "1s" }} />
                 </div>
 
                 <h1 className="text-3xl font-extrabold tracking-tight mb-3 font-[family-name:var(--font-sans)]">
