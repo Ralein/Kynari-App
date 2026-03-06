@@ -87,7 +87,7 @@ export default function WelcomeLoadingPage() {
                 <div className="w-full flex flex-col items-center justify-center p-4 sm:p-10 min-h-[460px]">
 
                     {/* Video */}
-                    <div className="relative w-100 h-100 mb-8 flex items-center justify-center">
+                    <div className="relative w-92 h-92 mb-8 flex items-center justify-center">
                         <video
                             src="/load.webm"
                             autoPlay
