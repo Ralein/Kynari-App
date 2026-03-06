@@ -94,14 +94,6 @@ export async function getBaselineStatus(
 
 import type { EmotionEvent, HourlyGroup } from "@kynari/shared";
 
-export async function getEventsByDate(
-    token: string,
-    childId: string,
-    date: string
-): Promise<EmotionEvent[]> {
-    return apiFetch<EmotionEvent[]>(`/events/${childId}?date=${date}`, { token });
-}
-
 export async function getTimeline(
     token: string,
     childId: string,
@@ -114,24 +106,7 @@ export async function getTimeline(
 
 // ─── AI Reports API ─────────────────────────────────────────
 
-export interface WeeklyReport {
-    narrative: string;
-    week_start: string;
-    generated_at: string;
-    cached: boolean;
-}
 
-export async function getAIWeeklyReport(
-    token: string,
-    childId: string,
-    weekStart?: string
-): Promise<WeeklyReport> {
-    const params = weekStart ? `?week_start=${weekStart}` : "";
-    return apiFetch<WeeklyReport>(
-        `/summaries/${childId}/ai-report${params}`,
-        { token }
-    );
-}
 
 // ─── Analyze API ────────────────────────────────────────────
 
@@ -155,7 +130,7 @@ export interface AnalyzeImageResult {
     message?: string;
 }
 
-export interface AnalyzeAudioResult {
+interface AnalyzeAudioResult {
     success: boolean;
     modality?: string;
     need_label?: string;
@@ -169,7 +144,7 @@ export interface AnalyzeAudioResult {
     message?: string;
 }
 
-export interface AnalyzeVideoResult {
+interface AnalyzeVideoResult {
     success: boolean;
     modality?: string;
     need_label?: string;
@@ -185,7 +160,7 @@ export interface AnalyzeVideoResult {
     message?: string;
 }
 
-export interface SaveResultResponse {
+interface SaveResultResponse {
     success: boolean;
     event_id: string;
     session_id: string;
@@ -259,7 +234,7 @@ export async function saveAnalysisResult(
     });
 }
 
-export interface CombinedAnalysisResult {
+interface CombinedAnalysisResult {
     success: boolean;
     modality?: string;
     need_label?: string;

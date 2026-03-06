@@ -258,8 +258,6 @@ async def analyze_combined_endpoint(
     file: UploadFile = File(...),
     face_distress_score: float = Form(0.0),
     face_distress_intensity: str = Form("mild"),
-    face_need_label: str = Form(""),
-    face_all_needs: str = Form(""),
     face_stress_features: str = Form(""),
 ):
     """Combined face + voice analysis.
