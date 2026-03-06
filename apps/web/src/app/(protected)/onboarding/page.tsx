@@ -22,12 +22,25 @@ export default function OnboardingPage() {
                 {/* Welcome Step */}
                 <div className="text-center">
                     {/* Cute illustration */}
-                    <div className="relative w-28 h-28 mx-auto mb-8">
-                        <div className="w-28 h-28 rounded-full bg-gradient-to-br from-primary-100 to-primary-200 flex items-center justify-center">
+                    <div className="relative w-32 h-32 mx-auto mb-8 group">
+                        {/* Glow effect behind the circle */}
+                        <div className="absolute inset-0 bg-primary-200 rounded-full blur-[20px] opacity-60 group-hover:opacity-100 group-hover:blur-[25px] transition-all duration-700"></div>
+
+                        {/* Video Container */}
+                        <div className="relative w-32 h-32 rounded-full overflow-hidden flex items-center justify-center border-[5px] border-white ring-[5px] ring-primary-200/60 shadow-[0_8px_30px_rgb(0,0,0,0.12)] bg-white transition-all duration-500 ease-out group-hover:scale-105 group-hover:ring-primary-200 z-10">
+                            <video
+                                src="/video.mp4"
+                                autoPlay
+                                loop
+                                muted
+                                playsInline
+                                className="w-full h-full object-cover hover:scale-110 transition-transform duration-700"
+                            />
                         </div>
 
-                        <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-peach flex items-center justify-center animate-bounce-gentle">
-                            <span className="text-xs"><LuSparkles className="w-4 h-4 text-white" /></span>
+                        {/* Sparkles decoration */}
+                        <div className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-peach flex items-center justify-center shadow-lg shadow-peach/30 backdrop-blur-md z-20 animate-bounce-gentle transition-transform duration-500 group-hover:rotate-12">
+                            <LuSparkles className="w-4 h-4 text-white drop-shadow-sm" />
                         </div>
                     </div>
 
