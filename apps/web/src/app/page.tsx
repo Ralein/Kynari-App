@@ -22,6 +22,9 @@ import {
   RiEmotionUnhappyLine,
   RiSparklingLine,
   RiShieldCheckLine,
+  RiShieldKeyholeLine,
+  RiVolumeMuteLine,
+  RiHeartPulseLine,
 } from "react-icons/ri";
 
 export default function LandingPage() {
@@ -60,7 +63,7 @@ export default function LandingPage() {
             href="/login"
             className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#1a1b2e] text-white text-sm font-semibold hover:bg-[#2c2d42] transition-colors shadow-sm"
           >
-            Get the app
+            Get Started
             <RiArrowRightLine className="w-3.5 h-3.5" />
           </Link>
         </div>
@@ -103,18 +106,19 @@ export default function LandingPage() {
               </a>
             </div>
 
-            {/* Feature Icons Grid — 3 items */}
-            <div className="animate-fade-in-delay-3 grid grid-cols-3 gap-6 max-w-xs">
+            {/* Feature Icons Grid — 4 items */}
+            <div className="animate-fade-in-delay-3 grid grid-cols-4 gap-5 max-w-sm">
               {[
                 { icon: RiCloudOffLine, label: "NO CLOUD\nSTORAGE" },
                 { icon: RiCpuLine,      label: "ON-DEVICE\nPROCESSING" },
-                { icon: RiLockLine,     label: "PRIVACY\nCOMPLIANT" },
+                { icon: RiShieldKeyholeLine, label: "END-TO-END\nENCRYPTED" },
+                { icon: RiHeartPulseLine,   label: "BUILT FOR\nFAMILIES" },
               ].map(({ icon: Icon, label }) => (
-                <div key={label} className="flex flex-col items-center gap-3 group">
-                  <div className="w-14 h-14 rounded-full bg-white shadow-[0_4px_20px_-4px_rgba(0,0,0,0.07)] flex items-center justify-center text-slate-700 group-hover:scale-110 transition-transform duration-300">
-                    <Icon className="w-6 h-6" />
+                <div key={label} className="flex flex-col items-center gap-2.5 group">
+                  <div className="w-13 h-13 w-[52px] h-[52px] rounded-2xl bg-white shadow-[0_4px_20px_-4px_rgba(0,0,0,0.08)] flex items-center justify-center text-slate-600 group-hover:scale-110 group-hover:shadow-[0_6px_24px_-4px_rgba(240,137,122,0.2)] transition-all duration-300">
+                    <Icon className="w-5 h-5" />
                   </div>
-                  <span className="text-[10px] font-bold text-slate-600 tracking-wider text-center leading-tight whitespace-pre-line">{label}</span>
+                  <span className="text-[10px] font-bold text-slate-500 tracking-wider text-center leading-tight whitespace-pre-line">{label}</span>
                 </div>
               ))}
             </div>
@@ -131,7 +135,7 @@ export default function LandingPage() {
 
             {/* Status Bar */}
             <div className="flex justify-between items-center px-6 pt-3 pb-2 text-[11px] font-medium text-slate-800 z-40 bg-transparent">
-              <span>9:41</span>
+              <span>11:11</span>
               <div className="flex gap-1.5 items-center">
                 <RiSignalTowerLine className="w-3.5 h-3.5" />
                 <RiWifiLine className="w-3.5 h-3.5" />
@@ -259,19 +263,19 @@ export default function LandingPage() {
                 icon: RiMicLine,
                 title: "We listen for tone",
                 desc: "Kynari detects emotional prosody — the music of your child's voice — not their words. Think pitch, rhythm, and energy.",
-                gradient: "from-[#EAE2FB] to-[#D8CCF7]",
+                gradient: "from-[#EAE2FB] to-[#C9B8F4]",
               },
               {
                 icon: RiBrainLine,
                 title: "AI runs on your phone",
                 desc: "All emotion recognition happens on-device using ONNX Runtime. No audio ever leaves your phone. Ever.",
-                gradient: "from-[#EAE2FB] to-[#D8CCF7]",
+                gradient: "from-[#A2DDF4]/60 to-[#7BC8EE]/40",
               },
               {
                 icon: RiBarChart2Line,
                 title: "Only labels reach us",
                 desc: "We receive tiny data packets — just an emotion label, a confidence score, and a timestamp. That's it.",
-                gradient: "from-[#FCECD8] to-[#F3A595]/30",
+                gradient: "from-[#FCECD8] to-[#F3A595]/40",
               },
             ].map(({ icon: Icon, title, desc, gradient }) => (
               <div key={title} className="bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-2xl p-8 group cursor-default">
@@ -341,10 +345,10 @@ export default function LandingPage() {
         <section className="py-16 text-center">
           <div className="flex flex-wrap justify-center gap-6 text-sm text-slate-400">
             {[
-              { icon: RiLockLine,   label: "Zero audio storage" },
-              { icon: RiBrainLine,  label: "On-device AI" },
-              { icon: RiShieldLine, label: "COPPA compliant" },
-              { icon: RiLockLine,   label: "End-to-end encrypted" },
+              { icon: RiVolumeMuteLine,    label: "Zero audio storage" },
+              { icon: RiBrainLine,         label: "On-device AI" },
+              { icon: RiShieldLine,        label: "COPPA compliant" },
+              { icon: RiShieldKeyholeLine, label: "End-to-end encrypted" },
             ].map(({ icon: Icon, label }) => (
               <span key={label} className="flex items-center gap-2">
                 <Icon className="w-3.5 h-3.5 text-emerald-500" />
