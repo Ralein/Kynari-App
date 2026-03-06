@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Mic, Brain, BarChart3, ArrowRight, Sparkle } from "lucide-react";
+import { Mic, Brain, BarChart3, ArrowRight } from "lucide-react";
 import { LuSparkles } from "react-icons/lu";
 
 export default function OnboardingPage() {

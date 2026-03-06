@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useChildren } from "@/lib/hooks";
 import { ChildCard } from "./ChildCard";
-import { Search, Baby, Plus, Sun, Moon, CloudSun } from "lucide-react";
+import { Baby, Plus, Sun, Moon, CloudSun } from "lucide-react";
 
 export default function DashboardPage() {
     const { data: children, isLoading } = useChildren();
@@ -22,7 +22,7 @@ export default function DashboardPage() {
                     <div className="flex items-center justify-center sm:justify-start gap-2 mb-2">
                         <GreetingIcon className="w-6 h-6 text-[#F0897A]" />
                         <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight font-[family-name:var(--font-sans)] text-[#1a1b2e]">
-                            {greeting} 
+                            {greeting}
                         </h1>
                     </div>
                     <p className="text-[#4a4b5e] text-lg">
@@ -76,10 +76,10 @@ export default function DashboardPage() {
                     >
                         Get Started
                     </Link>
-                     
-                    
+
+
                 </div>
-                
+
             )}
 
             {/* Child Cards */}
@@ -104,7 +104,7 @@ export default function DashboardPage() {
                         </span>
                     </Link>
                 </div>
-                
+
             )}
         </div>
     );
