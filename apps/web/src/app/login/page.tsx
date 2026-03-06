@@ -23,7 +23,7 @@ export default function LoginPage() {
                 </div>
 
                 {/* Clerk Sign-In Complete State */}
-            <div className="flex justify-center w-full">
+                <div className="flex justify-center w-full">
 
                     <SignIn
                         routing="hash"
@@ -51,11 +51,8 @@ export default function LoginPage() {
                 </div>
 
                 {/* Footer */}
-                <p className="text-center text-xs font-medium text-slate-400 mt-6 pb-4">
-                    By signing in, you agree to our{" "}
-                    <Link href="/privacy" className="text-[#1a1b2e] hover:text-[#6B48C8] transition-colors inline-block ml-1">
-                        Privacy Policy
-                    </Link>
+                <p className="text-center text-xs font-medium text-slate-400 mt-2 pb-4">
+                    By signing in, you agree to our <Link href="/privacy" className="text-[#1a1b2e] hover:text-[#6B48C8] transition-colors inline-block ml-1">Privacy Policy</Link>
                 </p>
             </div>
         </div>
