@@ -20,12 +20,10 @@ export default async function ProtectedLayout({
         redirect("/login");
     }
 
-    const email = user.emailAddresses[0]?.emailAddress;
-
     return (
         <div className="min-h-screen bg-[#Fdfbf9] font-[family-name:var(--font-sans)] text-[#1C1C2A] relative overflow-hidden">
             <BackgroundGradients />
-            <TopNav email={email} />
+            <TopNav />
 
             {/* ─── Content ─────────────────────────────────── */}
             <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8 pb-24 sm:pb-8">
@@ -36,3 +34,4 @@ export default async function ProtectedLayout({
         </div>
     );
 }
+
