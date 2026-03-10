@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🧒 Kynari
+# ![Project Preview](apps/web/public/logo1.png) Kynari
 
 ### Privacy-First AI Baby Need Detection
 
