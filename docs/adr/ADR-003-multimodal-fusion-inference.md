@@ -20,9 +20,9 @@ Kynari combines **audio cry analysis** (primary) + **face analysis** (secondary)
 | Output labels | 7 emotions (adult taxonomy) | ⚠️ Should be 5 needs (hungry, diaper, sleepy, pain, calm) |
 | Feedback loop | None | ❌ No personalization |
 
-### Master Prompt Requirements
+### Master Requirements
 
-The master prompt specifies:
+
 ```json
 {
   "prediction": "Hungry",
