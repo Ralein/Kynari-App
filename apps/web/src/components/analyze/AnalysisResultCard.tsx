@@ -1,5 +1,5 @@
 import { type NeedLabel, DISTRESS_SCALE, NEED_COLORS, NEED_EMOJI, NEED_ADVICE } from "@kynari/shared";
-import { CheckCircle2, Stethoscope, Lightbulb, Volume2, ThumbsUp, ThumbsDown, Link2, Radio, ScanFace, FileStack, Save, Activity, AudioLines } from "lucide-react";
+import { CheckCircle2, Stethoscope, Lightbulb, Volume2, ThumbsUp, ThumbsDown, Link2, Radio, ScanFace, FileStack, Save, Activity, AudioLines, Heart, ChevronRight } from "lucide-react";
 
 export type AnalysisResult = {
     type: "face" | "audio" | "video";
@@ -56,9 +56,10 @@ interface AnalysisResultCardProps {
     saved: boolean;
     handleSave: () => void;
     onBoostWithAudio: (rawResult: unknown) => void;
+    onShowSoothePlan?: (need: string, confidence: number) => void;
 }
 
-export function AnalysisResultCard({ result, childrenData, selectedChild, feedbackGiven, setFeedbackGiven, saved, handleSave, onBoostWithAudio }: AnalysisResultCardProps) {
+export function AnalysisResultCard({ result, childrenData, selectedChild, feedbackGiven, setFeedbackGiven, saved, handleSave, onBoostWithAudio, onShowSoothePlan }: AnalysisResultCardProps) {
     const primaryScore = result.confidence ?? result.distress_score ?? 0;
     const severity = getSeverity(primaryScore);
     const distressLevel = getDistressLevel(result.distress_score ?? primaryScore);
@@ -242,6 +243,27 @@ export function AnalysisResultCard({ result, childrenData, selectedChild, feedba
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Soothe Plan CTA — Phase 2 */}
+            {result.need_label && (result.confidence ?? 0) >= 0.45 && onShowSoothePlan && (
+                <button
+                    onClick={() => onShowSoothePlan(result.need_label!, result.confidence ?? 0)}
+                    className="w-full bg-gradient-to-r from-[#FFE5E0] to-[#FCECD8] border border-[#F3A595]/30 rounded-3xl p-5 flex items-center gap-4 hover:shadow-[0_8px_32px_-4px_rgba(0,0,0,0.1)] hover:-translate-y-0.5 transition-all duration-300 group"
+                >
+                    <div className="w-12 h-12 rounded-2xl bg-white/80 flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                        <Heart className="w-6 h-6 text-[#F0897A]" />
+                    </div>
+                    <div className="flex-1 text-left">
+                        <p className="text-sm font-bold text-[#1a1b2e] font-[family-name:var(--font-sans)] mb-0.5">
+                            Get Soothe Plan
+                        </p>
+                        <p className="text-xs text-[#4a4b5e]">
+                            Personalised techniques for <span className="font-semibold capitalize">{result.need_label}</span> — ranked by what works
+                        </p>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-[#F0897A] group-hover:translate-x-1 transition-transform" />
+                </button>
             )}
 
             {/* Boost with audio */}

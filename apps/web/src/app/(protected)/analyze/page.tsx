@@ -23,6 +23,7 @@ import { AnalyzingOverlay } from "@/components/analyze/AnalyzingOverlay";
 type Tab = "camera" | "audio" | "upload";
 
 import { AnalysisResultCard, type AnalysisResult } from "@/components/analyze/AnalysisResultCard";
+import { SoothePanel } from "@/components/soothe/SoothePanel";
 
 
 export default function AnalyzePage() {
@@ -37,6 +38,7 @@ export default function AnalyzePage() {
     const [feedbackGiven, setFeedbackGiven] = useState(false);
     const [combinedMode, setCombinedMode] = useState(false);
     const faceResultRef = useRef<AnalyzeImageResult | null>(null);
+    const [soothePlan, setSoothePlan] = useState<{ need: string; confidence: number } | null>(null);
 
     useEffect(() => {
         if (children?.length && !selectedChild) {
@@ -555,7 +557,20 @@ export default function AnalyzePage() {
                         setError(null);
                         setSaved(false);
                         setCapturePreview(null);
+                        setSoothePlan(null);
                     }}
+                    onShowSoothePlan={(need, confidence) => {
+                        setSoothePlan({ need, confidence });
+                    }}
+                />
+            )}
+
+            {/* Soothe Plan — Phase 2 */}
+            {soothePlan && selectedChild && (
+                <SoothePanel
+                    childId={selectedChild}
+                    need={soothePlan.need}
+                    confidence={soothePlan.confidence}
                 />
             )}
         </div>

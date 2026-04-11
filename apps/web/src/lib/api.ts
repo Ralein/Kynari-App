@@ -273,3 +273,314 @@ export async function analyzeCombined(
 
     return res.json();
 }
+
+
+// ─── Soothe Engine API ──────────────────────────────────────
+
+export interface SootheTechnique {
+    technique_id: string;
+    name: string;
+    description: string;
+    icon: string;
+    steps: string[];
+    timer_seconds: number | null;
+    success_rate: number | null;
+    total_feedback: number;
+}
+
+export interface SoothePlanResult {
+    need: string;
+    confidence: number;
+    techniques: SootheTechnique[];
+    personalised: boolean;
+}
+
+export interface SootheFeedbackPayload {
+    child_id: string;
+    need: string;
+    technique_id: string;
+    outcome: "success" | "fail";
+    notes?: string;
+    duration_seconds?: number;
+}
+
+export async function getSoothePlan(
+    token: string,
+    childId: string,
+    need: string,
+    confidence: number = 0.0
+): Promise<SoothePlanResult> {
+    return apiFetch<SoothePlanResult>(
+        `/api/soothe/plan?child_id=${childId}&need=${need}&confidence=${confidence}`,
+        { token }
+    );
+}
+
+export async function submitSootheFeedback(
+    token: string,
+    feedback: SootheFeedbackPayload
+): Promise<{ success: boolean; feedback_id: string; message: string }> {
+    return apiFetch(`/api/soothe/feedback`, {
+        token,
+        method: "POST",
+        body: JSON.stringify(feedback),
+    });
+}
+
+export async function getSootheStats(
+    token: string,
+    childId: string
+): Promise<{ child_id: string; total_feedback: number; techniques: unknown[] }> {
+    return apiFetch(`/api/soothe/stats/${childId}`, { token });
+}
+
+
+// ─── Soundscape API ─────────────────────────────────────────
+
+export interface SoundscapeProfile {
+    id: string;
+    name: string;
+    description: string;
+    pink_noise: number;
+    nature: number;
+    piano: number;
+    shush: number;
+    icon: string;
+}
+
+export interface SoundscapePreferences {
+    child_id: string;
+    default_profile: string;
+    auto_adapt: boolean;
+    nature_sound: string;
+    updated_at?: string;
+}
+
+export async function getSoundscapeProfiles(token: string): Promise<SoundscapeProfile[]> {
+    return apiFetch<SoundscapeProfile[]>(`/api/soundscape/profiles`, { token });
+}
+
+export async function getSoundscapePreferences(
+    token: string,
+    childId: string
+): Promise<SoundscapePreferences> {
+    return apiFetch<SoundscapePreferences>(`/api/soundscape/preferences/${childId}`, { token });
+}
+
+export async function saveSoundscapePreferences(
+    token: string,
+    prefs: { child_id: string; default_profile: string; auto_adapt: boolean; nature_sound: string }
+): Promise<SoundscapePreferences> {
+    return apiFetch<SoundscapePreferences>(`/api/soundscape/preferences`, {
+        token,
+        method: "POST",
+        body: JSON.stringify(prefs),
+    });
+}
+
+export async function logSoundscapeSession(
+    token: string,
+    session: {
+        child_id: string;
+        started_at: string;
+        duration_minutes: number;
+        avg_distress: number;
+        profile_used: string;
+        auto_adapt_used: boolean;
+    }
+): Promise<unknown> {
+    return apiFetch(`/api/soundscape/session-end`, {
+        token,
+        method: "POST",
+        body: JSON.stringify(session),
+    });
+}
+
+
+// ─── Voice Lullaby API ──────────────────────────────────────
+
+export interface VoiceInfo {
+    voice_id: string;
+    name: string;
+    gender: string;
+    style: string;
+    description: string;
+}
+
+export interface LullabyInfo {
+    id: string;
+    title: string;
+    lyrics: string;
+    mood: string;
+    origin: string;
+    duration_estimate: number;
+}
+
+export async function getVoices(token: string): Promise<VoiceInfo[]> {
+    return apiFetch<VoiceInfo[]>(`/api/voice/voices`, { token });
+}
+
+export async function getVoicePreference(
+    token: string
+): Promise<{ parent_id: string; selected_voice: string; label: string }> {
+    return apiFetch(`/api/voice/preference`, { token });
+}
+
+export async function saveVoicePreference(
+    token: string,
+    selectedVoice: string,
+    label: string = "Default"
+): Promise<unknown> {
+    return apiFetch(`/api/voice/preference`, {
+        token,
+        method: "POST",
+        body: JSON.stringify({ selected_voice: selectedVoice, label }),
+    });
+}
+
+export async function getLullabies(
+    token: string,
+    mood?: string
+): Promise<LullabyInfo[]> {
+    const url = mood ? `/api/voice/lullabies?mood=${mood}` : `/api/voice/lullabies`;
+    return apiFetch<LullabyInfo[]>(url, { token });
+}
+
+export function generateLullabyUrl(token: string, voiceId: string, lullabyId: string): string {
+    // For audio element src — returns the streaming endpoint URL
+    return `${API_BASE}/api/voice/generate`;
+}
+
+export async function generateLullabyBlob(
+    token: string,
+    voiceId: string,
+    lullabyId: string
+): Promise<Blob> {
+    const res = await fetch(`${API_BASE}/api/voice/generate`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ voice_id: voiceId, lullaby_id: lullabyId }),
+    });
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(error.detail || `TTS generation failed: ${res.status}`);
+    }
+    return res.blob();
+}
+
+
+// ─── Picture Book API ───────────────────────────────────────
+
+export interface BookPage {
+    page_number: number;
+    text: string;
+    image_prompt?: string;
+    image_url?: string;
+}
+
+export interface BookResponse {
+    id: string;
+    title: string;
+    theme: string;
+    style: string;
+    child_name?: string;
+    pages: BookPage[];
+    status: string;
+    created_at?: string;
+}
+
+export interface BookListItem {
+    id: string;
+    title: string;
+    theme: string;
+    style: string;
+    child_name?: string;
+    page_count: number;
+    status: string;
+    created_at?: string;
+}
+
+export async function generateBook(
+    token: string,
+    params: { child_id?: string; child_name: string; theme: string; style: string }
+): Promise<BookResponse> {
+    return apiFetch<BookResponse>(`/api/books/generate`, {
+        token,
+        method: "POST",
+        body: JSON.stringify(params),
+    });
+}
+
+export async function listBooks(token: string): Promise<BookListItem[]> {
+    return apiFetch<BookListItem[]>(`/api/books/`, { token });
+}
+
+export async function getBook(token: string, bookId: string): Promise<BookResponse> {
+    return apiFetch<BookResponse>(`/api/books/${bookId}`, { token });
+}
+
+export async function deleteBook(token: string, bookId: string): Promise<void> {
+    await apiFetch(`/api/books/${bookId}`, { token, method: "DELETE" });
+}
+
+
+// ─── Memory Garden API ──────────────────────────────────────
+
+export interface Milestone {
+    id: string;
+    child_id: string;
+    type: string;
+    title: string;
+    description?: string;
+    caption?: string;
+    detected_at?: string;
+    source: string;
+}
+
+export interface WeeklyNarrative {
+    id: string;
+    child_id: string;
+    week_start: string;
+    week_end: string;
+    narrative: string;
+    analysis_count: number;
+    soothe_count: number;
+    created_at?: string;
+}
+
+export interface MemoryGardenData {
+    child_id: string;
+    milestones: Milestone[];
+    narratives: WeeklyNarrative[];
+    total_milestones: number;
+    total_narratives: number;
+}
+
+export async function getMemoryGarden(token: string, childId: string): Promise<MemoryGardenData> {
+    return apiFetch<MemoryGardenData>(`/api/memory/garden/${childId}`, { token });
+}
+
+export async function createMilestone(
+    token: string,
+    params: { child_id: string; type: string; title: string; description?: string }
+): Promise<Milestone> {
+    return apiFetch<Milestone>(`/api/memory/milestones`, {
+        token,
+        method: "POST",
+        body: JSON.stringify(params),
+    });
+}
+
+export async function deleteMilestone(
+    token: string,
+    milestoneId: string,
+    childId: string
+): Promise<void> {
+    await apiFetch(`/api/memory/milestones/${milestoneId}?child_id=${childId}`, {
+        token,
+        method: "DELETE",
+    });
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LayoutDashboard, Search } from "lucide-react";
+import { LayoutDashboard, Search, Heart } from "lucide-react";
 import { useChildren } from "@/lib/hooks";
 
 export function BottomNav() {
@@ -19,13 +19,22 @@ export function BottomNav() {
                     <span className="text-[10px] font-semibold">Home</span>
                 </Link>
                 {hasChildren && (
-                    <Link
-                        href="/analyze"
-                        className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-slate-400 hover:text-[#1a1b2e] transition-colors"
-                    >
-                        <Search className="w-5 h-5" />
-                        <span className="text-[10px] font-medium">Analyze</span>
-                    </Link>
+                    <>
+                        <Link
+                            href="/soothe"
+                            className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-slate-400 hover:text-[#1a1b2e] transition-colors"
+                        >
+                            <Heart className="w-5 h-5" />
+                            <span className="text-[10px] font-medium">Soothe</span>
+                        </Link>
+                        <Link
+                            href="/analyze"
+                            className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-slate-400 hover:text-[#1a1b2e] transition-colors"
+                        >
+                            <Search className="w-5 h-5" />
+                            <span className="text-[10px] font-medium">Analyze</span>
+                        </Link>
+                    </>
                 )}
             </div>
         </nav>
