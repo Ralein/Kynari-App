@@ -2,17 +2,16 @@
 
 Pipeline:
 1. Load audio via librosa (supports wav, mp3, m4a, ogg, webm)
-2. Extract acoustic features (duration, energy, pitch, spectral centroid, MFCCs)
-3. Generate Mel spectrogram (for frontend visualization)
-4. Classify cry reason using Wav2Vec2 XLSR-53 transformer model
-5. Compute acoustic heuristics from extracted features
-6. Ensemble: 75% model + 25% heuristics → final need scores
+2. Cry/no-cry detection gate (energy + pitch threshold)
+3. Extract rich acoustic features (duration, energy, pitch, spectral, MFCCs, temporal)
+4. Generate Mel spectrogram (for frontend visualization)
+5. Classify cry reason using Wav2Vec2 XLSR-53 transformer model (primary)
+6. Compute acoustic heuristics from extracted features
+7. Ensemble: confidence-adaptive weights → final need scores
 
-Model: Wiam/baby-cry-classification-finetuned-babycry-v4
-  - Architecture: Wav2Vec2 Large XLSR-53 (pre-trained on 53 languages)
-  - Fine-tuned on baby cry classification dataset
-  - Accuracy: ~81.5%
-  - Classes: hungry, belly_pain, discomfort, tired, burping, scared, cold_hot, lonely
+Model priority:
+  1. Wiam/baby-cry-classification-finetuned-babycry-v4 (81.5% accuracy, Wav2Vec2 XLSR-53)
+  2. foduucom/baby-cry-classification (38.5% accuracy, fast CNN fallback)
 
 Need labels: hungry, pain, sleepy, diaper, calm
 """
@@ -30,6 +29,7 @@ logger = logging.getLogger(__name__)
 # ─── Lazy-loaded singleton ───────────────────────────────────
 
 _cry_classifier = None
+_active_model_name: str | None = None
 
 
 # ─── Label mapping ───────────────────────────────────────────
@@ -81,21 +81,20 @@ NEED_LABELS = ["hungry", "diaper", "sleepy", "pain", "calm"]
 def _load_cry_classifier():
     """Lazy-load the baby cry classification pipeline.
 
-    Uses the fast CNN model as primary (foduucom — <1s inference on CPU).
-    The acoustic heuristics ensemble compensates for accuracy.
-    Falls back to Wav2Vec2 XLSR-53 if CNN is unavailable.
+    Priority: Wav2Vec2 XLSR-53 (81.5% accuracy, ~8-15s inference)
+    Fallback: Fast CNN model (~1-2s inference, 38.5% accuracy)
     """
-    global _cry_classifier
+    global _cry_classifier, _active_model_name
     if _cry_classifier is not None:
         return _cry_classifier
 
-    # Primary: fast CNN model (~1-2s); Fallback: Wav2Vec2 (~8-15s but more accurate)
+    # Primary: accurate Wav2Vec2; Fallback: fast but less accurate CNN
     models_to_try = [
-        "foduucom/baby-cry-classification",                         # Fast CNN
-        "Wiam/baby-cry-classification-finetuned-babycry-v4",        # Slow but accurate
+        ("Wiam/baby-cry-classification-finetuned-babycry-v4", "wav2vec2"),
+        ("foduucom/baby-cry-classification", "cnn"),
     ]
 
-    for model_name in models_to_try:
+    for model_name, model_type in models_to_try:
         try:
             from transformers import pipeline
             _cry_classifier = pipeline(
@@ -103,7 +102,8 @@ def _load_cry_classifier():
                 model=model_name,
                 device=-1,  # CPU
             )
-            logger.info(f"Baby cry classifier loaded: {model_name}")
+            _active_model_name = model_name
+            logger.info(f"Baby cry classifier loaded: {model_name} ({model_type})")
             return _cry_classifier
         except Exception as e:
             logger.warning(f"Failed to load {model_name}: {e}")
@@ -144,6 +144,80 @@ def generate_spectrogram_b64(y: np.ndarray, sr: int) -> str | None:
         return None
 
 
+# ─── Cry detection gate ──────────────────────────────────────
+
+def detect_crying(y: np.ndarray, sr: int) -> dict[str, Any]:
+    """Detect whether the audio contains baby crying.
+
+    Uses energy threshold + pitch range to distinguish:
+    - Crying: sustained vocalization, moderate-high energy, pitch 250-800Hz
+    - Babbling: short bursts, variable pitch
+    - Silence: very low energy
+    - Background noise: no pitch structure
+
+    Returns: {"is_crying": bool, "cry_confidence": float, "audio_type": str}
+    """
+    import librosa
+
+    duration = len(y) / sr
+    rms = float(np.sqrt(np.mean(y**2)))
+
+    # Energy-based silence detection
+    if rms < 0.005:
+        return {"is_crying": False, "cry_confidence": 0.05, "audio_type": "silence"}
+
+    # Pitch extraction for crying detection
+    try:
+        pitches, magnitudes = librosa.piptrack(y=y, sr=sr)
+        pitch_values = pitches[magnitudes > np.median(magnitudes)]
+        pitch_values = pitch_values[pitch_values > 0]
+
+        if len(pitch_values) == 0:
+            return {"is_crying": False, "cry_confidence": 0.1, "audio_type": "noise"}
+
+        mean_pitch = float(np.mean(pitch_values))
+        pitch_coverage = len(pitch_values) / max(pitches.shape[1], 1)
+
+    except Exception:
+        mean_pitch = 0.0
+        pitch_coverage = 0.0
+
+    # Crying characteristics:
+    # - Baby cry pitch typically 250-800 Hz
+    # - Sustained vocalization (pitch present in >30% of frames)
+    # - Moderate to high energy
+    is_cry_pitch = 200 < mean_pitch < 900
+    is_sustained = pitch_coverage > 0.25
+    is_loud_enough = rms > 0.01
+
+    cry_confidence = 0.0
+    if is_cry_pitch:
+        cry_confidence += 0.4
+    if is_sustained:
+        cry_confidence += 0.3
+    if is_loud_enough:
+        cry_confidence += 0.2
+    if rms > 0.03:
+        cry_confidence += 0.1
+
+    is_crying = cry_confidence >= 0.5
+
+    if is_crying:
+        audio_type = "crying"
+    elif is_loud_enough and is_cry_pitch:
+        audio_type = "fussing"
+    elif is_loud_enough:
+        audio_type = "babbling"
+    else:
+        audio_type = "quiet"
+
+    return {
+        "is_crying": is_crying,
+        "cry_confidence": round(cry_confidence, 4),
+        "audio_type": audio_type,
+    }
+
+
 # ─── Acoustic feature extraction ─────────────────────────────
 
 def extract_audio_features(y: np.ndarray, sr: int) -> dict[str, Any]:
@@ -160,9 +234,11 @@ def extract_audio_features(y: np.ndarray, sr: int) -> dict[str, Any]:
         pitch_values = pitch_values[pitch_values > 0]
         mean_pitch = float(np.mean(pitch_values)) if len(pitch_values) > 0 else 0.0
         pitch_std = float(np.std(pitch_values)) if len(pitch_values) > 0 else 0.0
+        pitch_range = float(np.ptp(pitch_values)) if len(pitch_values) > 0 else 0.0
     except Exception:
         mean_pitch = 0.0
         pitch_std = 0.0
+        pitch_range = 0.0
 
     # Zero crossing rate
     zcr = float(np.mean(librosa.feature.zero_crossing_rate(y)))
@@ -179,33 +255,71 @@ def extract_audio_features(y: np.ndarray, sr: int) -> dict[str, Any]:
     except Exception:
         rolloff = 0.0
 
+    # Spectral bandwidth — spread of the spectrum
+    try:
+        bandwidth = float(np.mean(librosa.feature.spectral_bandwidth(y=y, sr=sr)))
+    except Exception:
+        bandwidth = 0.0
+
+    # Spectral contrast — valley-to-peak difference across subbands
+    try:
+        contrast = librosa.feature.spectral_contrast(y=y, sr=sr)
+        contrast_mean = float(np.mean(contrast))
+    except Exception:
+        contrast_mean = 0.0
+
     # MFCCs — timbral texture (13 coefficients)
     try:
         mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13)
         mfcc_var = float(np.mean(np.var(mfccs, axis=1)))
+        mfcc_delta_var = float(np.mean(np.var(librosa.feature.delta(mfccs), axis=1)))
     except Exception:
         mfcc_var = 0.0
+        mfcc_delta_var = 0.0
 
     # RMS energy variance (rhythmic patterns)
     try:
         rms_frames = librosa.feature.rms(y=y)[0]
         energy_var = float(np.var(rms_frames))
         energy_peaks = int(np.sum(rms_frames > np.mean(rms_frames) * 1.5))
+        # Energy onset strength — measures rhythmicity
+        onset_env = librosa.onset.onset_strength(y=y, sr=sr)
+        onset_rate = float(np.sum(onset_env > np.mean(onset_env) * 1.5)) / max(duration, 0.1)
     except Exception:
         energy_var = 0.0
         energy_peaks = 0
+        onset_rate = 0.0
+
+    # Temporal features — cry bout patterns
+    try:
+        # Segment the audio into voiced/unvoiced regions using energy
+        frame_length = int(0.025 * sr)  # 25ms frames
+        hop_length = int(0.010 * sr)    # 10ms hops
+        rms_short = librosa.feature.rms(y=y, frame_length=frame_length, hop_length=hop_length)[0]
+        voiced_mask = rms_short > np.mean(rms_short) * 0.5
+        # Count transitions (cry bouts)
+        transitions = int(np.sum(np.abs(np.diff(voiced_mask.astype(int)))))
+        cry_bout_count = max(transitions // 2, 0)
+    except Exception:
+        cry_bout_count = 0
 
     return {
         "duration_seconds": round(duration, 2),
         "rms_energy": round(rms, 6),
         "mean_pitch_hz": round(mean_pitch, 1),
         "pitch_std_hz": round(pitch_std, 1),
+        "pitch_range_hz": round(pitch_range, 1),
         "zero_crossing_rate": round(zcr, 6),
         "spectral_centroid": round(centroid, 1),
         "spectral_rolloff": round(rolloff, 1),
+        "spectral_bandwidth": round(bandwidth, 1),
+        "spectral_contrast": round(contrast_mean, 4),
         "mfcc_variance": round(mfcc_var, 4),
+        "mfcc_delta_variance": round(mfcc_delta_var, 4),
         "energy_variance": round(energy_var, 8),
         "energy_peaks": energy_peaks,
+        "onset_rate": round(onset_rate, 2),
+        "cry_bout_count": cry_bout_count,
     }
 
 
@@ -215,8 +329,8 @@ def compute_acoustic_heuristics(features: dict[str, Any]) -> dict[str, float]:
     """Compute need likelihood from acoustic features using cry research heuristics.
 
     Based on published infant cry research:
-    - Pain: high pitch (>500Hz), high energy, high ZCR, sudden onset
-    - Hungry: medium pitch (300-500Hz), rhythmic energy pattern, moderate ZCR
+    - Pain: high pitch (>500Hz), high energy, high ZCR, sudden onset, wide pitch range
+    - Hungry: medium pitch (300-500Hz), rhythmic energy pattern, moderate ZCR, regular bouts
     - Sleepy: low pitch (<300Hz), low energy, smooth spectrum, low variability
     - Diaper: intermittent medium-high energy, moderate pitch, high spectral centroid
     - Calm: low energy, low pitch, minimal variability
@@ -227,62 +341,84 @@ def compute_acoustic_heuristics(features: dict[str, Any]) -> dict[str, float]:
 
     pitch = features.get("mean_pitch_hz", 0)
     pitch_std = features.get("pitch_std_hz", 0)
+    pitch_range = features.get("pitch_range_hz", 0)
     energy = features.get("rms_energy", 0)
     zcr = features.get("zero_crossing_rate", 0)
     centroid = features.get("spectral_centroid", 0)
+    bandwidth = features.get("spectral_bandwidth", 0)
+    contrast = features.get("spectral_contrast", 0)
     mfcc_var = features.get("mfcc_variance", 0)
+    mfcc_delta_var = features.get("mfcc_delta_variance", 0)
     energy_var = features.get("energy_variance", 0)
     energy_peaks = features.get("energy_peaks", 0)
+    onset_rate = features.get("onset_rate", 0)
+    cry_bouts = features.get("cry_bout_count", 0)
 
-    # ── Pain: high pitch + high energy + high ZCR ─────────
+    # ── Pain: high pitch + high energy + high ZCR + wide pitch range ──
     if pitch > 500:
-        scores["pain"] += 0.35
+        scores["pain"] += 0.30
     elif pitch > 400:
         scores["pain"] += 0.15
     if energy > 0.05:
-        scores["pain"] += 0.2
-    if zcr > 0.1:
         scores["pain"] += 0.15
+    if zcr > 0.1:
+        scores["pain"] += 0.10
     if pitch_std > 100:  # erratic pitch = distress
-        scores["pain"] += 0.1
+        scores["pain"] += 0.10
+    if pitch_range > 300:  # wide range = pain cry
+        scores["pain"] += 0.10
+    if onset_rate < 3:  # sustained cry, not rhythmic
+        scores["pain"] += 0.05
 
-    # ── Hungry: medium pitch + rhythmic energy ────────────
+    # ── Hungry: medium pitch + rhythmic energy + regular bouts ──
     if 250 < pitch < 500:
-        scores["hungry"] += 0.25
+        scores["hungry"] += 0.20
     if 0.02 < energy < 0.06:
-        scores["hungry"] += 0.15
+        scores["hungry"] += 0.12
     if energy_peaks >= 3:  # rhythmic crying pattern
-        scores["hungry"] += 0.2
+        scores["hungry"] += 0.18
     if 0.00001 < energy_var < 0.001:  # moderate rhythmic variation
-        scores["hungry"] += 0.1
+        scores["hungry"] += 0.08
+    if cry_bouts >= 3:  # multiple cry bouts = rhythmic hunger cry
+        scores["hungry"] += 0.12
+    if onset_rate > 3:  # rhythmic onsets
+        scores["hungry"] += 0.08
 
-    # ── Sleepy: low pitch + low energy + smooth ───────────
+    # ── Sleepy: low pitch + low energy + smooth + low delta MFCC ──
     if pitch < 300 and pitch > 0:
-        scores["sleepy"] += 0.3
-    if energy < 0.03 and energy > 0:
         scores["sleepy"] += 0.25
+    if energy < 0.03 and energy > 0:
+        scores["sleepy"] += 0.20
     if mfcc_var < 50:
-        scores["sleepy"] += 0.15
+        scores["sleepy"] += 0.10
     if pitch_std < 50:  # steady pitch = whining/fussing
-        scores["sleepy"] += 0.1
+        scores["sleepy"] += 0.10
+    if mfcc_delta_var < 20:  # smooth, not changing much
+        scores["sleepy"] += 0.08
+    if bandwidth < 2000:  # narrow spectrum = whimper
+        scores["sleepy"] += 0.07
 
-    # ── Diaper: intermittent, moderate-high centroid ──────
+    # ── Diaper: intermittent, moderate-high centroid, irregular ──
     if centroid > 3000:
-        scores["diaper"] += 0.2
+        scores["diaper"] += 0.18
     if 300 < pitch < 450:
-        scores["diaper"] += 0.15
+        scores["diaper"] += 0.12
     if energy_peaks >= 2:
-        scores["diaper"] += 0.1
+        scores["diaper"] += 0.08
     if energy_var > 0.0005:
-        scores["diaper"] += 0.1
+        scores["diaper"] += 0.08
+    if contrast > 20:  # high spectral contrast = sharp cries
+        scores["diaper"] += 0.08
 
-    # ── Calm: very low energy, minimal variability ────────
+    # ── Calm: very low energy, minimal variability ──
     if energy < 0.015:
-        scores["calm"] += 0.4
+        scores["calm"] += 0.35
     if pitch < 200 or pitch == 0:
-        scores["calm"] += 0.2
+        scores["calm"] += 0.18
     if energy_var < 0.00005:
-        scores["calm"] += 0.15
+        scores["calm"] += 0.12
+    if cry_bouts == 0:
+        scores["calm"] += 0.10
 
     # Normalize to sum to 1
     total = sum(scores.values())
@@ -294,8 +430,13 @@ def compute_acoustic_heuristics(features: dict[str, Any]) -> dict[str, float]:
 
 # ─── Ensemble scoring ───────────────────────────────────────
 
-MODEL_WEIGHT = 0.75
-HEURISTIC_WEIGHT = 0.25
+# Confidence-adaptive weights
+HIGH_CONF_MODEL_WEIGHT = 0.85
+HIGH_CONF_HEURISTIC_WEIGHT = 0.15
+MED_CONF_MODEL_WEIGHT = 0.70
+MED_CONF_HEURISTIC_WEIGHT = 0.30
+LOW_CONF_MODEL_WEIGHT = 0.50
+LOW_CONF_HEURISTIC_WEIGHT = 0.50
 
 
 def ensemble_scores(
@@ -304,17 +445,20 @@ def ensemble_scores(
 ) -> dict[str, float]:
     """Combine model predictions with acoustic heuristics.
 
-    Weighting: 75% model + 25% heuristics.
-    When model confidence is very low (<0.3 for top class),
-    heuristics get more weight (50/50).
+    Confidence-adaptive weighting:
+    - Model confidence ≥ 0.6: 85% model + 15% heuristics (model is confident)
+    - Model confidence 0.3-0.6: 70% model + 30% heuristics (moderate)
+    - Model confidence < 0.3: 50% model + 50% heuristics (model unsure)
     """
     # Check model confidence
     max_model_score = max(model_scores.values()) if model_scores else 0
-    if max_model_score < 0.3:
-        # Model is uncertain — give heuristics more weight
-        w_model, w_heuristic = 0.50, 0.50
+
+    if max_model_score >= 0.6:
+        w_model, w_heuristic = HIGH_CONF_MODEL_WEIGHT, HIGH_CONF_HEURISTIC_WEIGHT
+    elif max_model_score >= 0.3:
+        w_model, w_heuristic = MED_CONF_MODEL_WEIGHT, MED_CONF_HEURISTIC_WEIGHT
     else:
-        w_model, w_heuristic = MODEL_WEIGHT, HEURISTIC_WEIGHT
+        w_model, w_heuristic = LOW_CONF_MODEL_WEIGHT, LOW_CONF_HEURISTIC_WEIGHT
 
     fused = {}
     for label in NEED_LABELS:
@@ -347,7 +491,7 @@ def analyze_audio_bytes(audio_data: bytes, filename: str = "audio.wav") -> dict[
 
 
 def analyze_audio_file(file_path: str) -> dict[str, Any]:
-    """Full pipeline: load → features → spectrogram → classify → heuristics → ensemble.
+    """Full pipeline: load → cry gate → features → spectrogram → classify → heuristics → ensemble.
 
     Args:
         file_path: Path to an audio file (wav/mp3/m4a/ogg/webm)
@@ -383,13 +527,32 @@ def analyze_audio_file(file_path: str) -> dict[str, Any]:
             "message": "Audio is too short. Please record at least 1 second of audio.",
         }
 
-    # ── Step 1: Extract acoustic features ───────────────
+    # ── Step 1: Cry detection gate ──────────────────────
+    cry_detection = detect_crying(y, sr)
+
+    # If no crying detected, return calm immediately
+    if not cry_detection["is_crying"] and cry_detection["audio_type"] in ("silence", "noise"):
+        return {
+            "success": True,
+            "modality": "voice",
+            "need_label": "calm",
+            "need_description": NEED_DESCRIPTIONS["calm"],
+            "confidence": 0.75,
+            "secondary_need": None,
+            "all_needs": {"calm": 0.75, "hungry": 0.08, "sleepy": 0.08, "diaper": 0.05, "pain": 0.04},
+            "raw_model_classes": {},
+            "audio_features": {"duration_seconds": round(duration, 2), "rms_energy": round(float(np.sqrt(np.mean(y**2))), 6)},
+            "spectrogram_b64": None,
+            "cry_detection": cry_detection,
+        }
+
+    # ── Step 2: Extract acoustic features ───────────────
     audio_features = extract_audio_features(y, sr)
 
-    # ── Step 2: Generate spectrogram ────────────────────
+    # ── Step 3: Generate spectrogram ────────────────────
     spectrogram_b64 = generate_spectrogram_b64(y, sr)
 
-    # ── Step 3: Run Wav2Vec2 model classification ───────
+    # ── Step 4: Run classifier ──────────────────────────
     model_need_scores: dict[str, float] = {label: 0.0 for label in NEED_LABELS}
     raw_classes = {}
     model_loaded = False
@@ -417,17 +580,25 @@ def analyze_audio_file(file_path: str) -> dict[str, Any]:
     except Exception as e:
         logger.warning(f"Cry classification failed, using heuristics only: {e}")
 
-    # ── Step 4: Compute acoustic heuristics ─────────────
+    # ── Step 5: Compute acoustic heuristics ─────────────
     heuristic_scores = compute_acoustic_heuristics(audio_features)
 
-    # ── Step 5: Ensemble ────────────────────────────────
+    # ── Step 6: Ensemble ────────────────────────────────
     if model_loaded:
         final_scores = ensemble_scores(model_need_scores, heuristic_scores)
     else:
         # Model failed — use heuristics only
         final_scores = heuristic_scores
 
-    # ── Step 6: Build result ────────────────────────────
+    # If audio was classified as fussing (not full cry), dampen non-calm scores slightly
+    if cry_detection["audio_type"] == "fussing":
+        calm_boost = 0.10
+        final_scores["calm"] = final_scores.get("calm", 0.0) + calm_boost
+        total = sum(final_scores.values())
+        if total > 0:
+            final_scores = {k: round(v / total, 4) for k, v in final_scores.items()}
+
+    # ── Step 7: Build result ────────────────────────────
     sorted_needs = sorted(final_scores.items(), key=lambda x: x[1], reverse=True)
     primary_need = sorted_needs[0][0]
     primary_confidence = sorted_needs[0][1]
@@ -446,4 +617,6 @@ def analyze_audio_file(file_path: str) -> dict[str, Any]:
         "raw_model_classes": raw_classes,
         "audio_features": audio_features,
         "spectrogram_b64": spectrogram_b64,
+        "cry_detection": cry_detection,
+        "model_used": _active_model_name,
     }

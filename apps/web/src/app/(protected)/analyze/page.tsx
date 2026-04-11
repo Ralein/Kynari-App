@@ -14,16 +14,14 @@ import type { AnalyzeImageResult } from "@/lib/api";
 import {
     Camera, Mic, Upload, ChevronRight,
     AlertCircle, Lightbulb, Scan, WifiOff,
-    ScanFace, RefreshCcw, Link2,
+    ScanFace, RefreshCcw, Link2, CheckCircle2,
+    User, Eye,
 } from "lucide-react";
 import { AnalyzingOverlay } from "@/components/analyze/AnalyzingOverlay";
 
 type Tab = "camera" | "audio" | "upload";
 
 import { AnalysisResultCard, type AnalysisResult } from "@/components/analyze/AnalysisResultCard";
-
-
-
 
 
 export default function AnalyzePage() {
@@ -57,14 +55,42 @@ export default function AnalyzePage() {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
     const [cameraActive, setCameraActive] = useState(false);
+    const [faceDetected, setFaceDetected] = useState(false);
+    const [capturePreview, setCapturePreview] = useState<string | null>(null);
+    const faceDetectionRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     const startCamera = useCallback(async () => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 } });
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: "user", width: 640, height: 480 },
+            });
             streamRef.current = stream;
             if (videoRef.current) videoRef.current.srcObject = stream;
             setCameraActive(true);
             setError(null);
+            setCapturePreview(null);
+            setFaceDetected(false);
+
+            // Start continuous face detection using browser FaceDetector API
+            if ("FaceDetector" in window) {
+                try {
+                    // @ts-expect-error FaceDetector is experimental
+                    const detector = new FaceDetector({ maxDetectedFaces: 1, fastMode: true });
+                    faceDetectionRef.current = setInterval(async () => {
+                        if (videoRef.current && videoRef.current.readyState >= 2) {
+                            try {
+                                const faces = await detector.detect(videoRef.current);
+                                setFaceDetected(faces.length > 0);
+                            } catch {
+                                // Silently ignore detection errors
+                            }
+                        }
+                    }, 500);
+                } catch {
+                    // FaceDetector not supported, fall back to no detection feedback
+                    logger("FaceDetector API not available, skipping live detection");
+                }
+            }
         } catch {
             setError("Could not access camera. Please allow camera permissions.");
         }
@@ -74,27 +100,78 @@ export default function AnalyzePage() {
         streamRef.current?.getTracks().forEach(t => t.stop());
         streamRef.current = null;
         setCameraActive(false);
+        setFaceDetected(false);
+        setCapturePreview(null);
+        if (faceDetectionRef.current) {
+            clearInterval(faceDetectionRef.current);
+            faceDetectionRef.current = null;
+        }
     }, []);
 
+    // Multi-frame capture: take 3 frames over ~600ms, send the best quality one
     const captureAndAnalyze = useCallback(async () => {
         if (!videoRef.current || !canvasRef.current || !token) return;
         setIsAnalyzing(true); setResult(null); setError(null); setSaved(false); setFeedbackGiven(false);
+
         const canvas = canvasRef.current;
         const video = videoRef.current;
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
-        canvas.getContext("2d")?.drawImage(video, 0, 0);
-        canvas.toBlob(async (blob) => {
-            if (!blob) { setError("Failed to capture image"); setIsAnalyzing(false); return; }
-            const file = new File([blob], "capture.jpg", { type: "image/jpeg" });
-            try {
-                const res = await analyzeImage(token, file);
-                if (res.success) {
-                    setResult({ type: "face", need_label: res.need_label, need_description: res.need_description, confidence: res.confidence, secondary_need: res.secondary_need, all_needs: res.all_needs, distress_score: res.distress_score, distress_intensity: res.distress_intensity, stress_features: res.stress_features, expression: res.expression, expression_confidence: res.expression_confidence, raw: res as unknown as Record<string, unknown> });
-                } else { setError(res.message || "Analysis failed"); }
-            } catch { setError("Failed to connect to analysis server"); }
+
+        // Capture 3 frames over 600ms
+        const frames: Blob[] = [];
+
+        const captureFrame = (): Promise<Blob | null> => {
+            return new Promise((resolve) => {
+                canvas.getContext("2d")?.drawImage(video, 0, 0);
+                canvas.toBlob((blob) => resolve(blob), "image/jpeg", 0.92);
+            });
+        };
+
+        for (let i = 0; i < 3; i++) {
+            const blob = await captureFrame();
+            if (blob) frames.push(blob);
+            if (i < 2) await new Promise(r => setTimeout(r, 300));
+        }
+
+        if (frames.length === 0) {
+            setError("Failed to capture image");
             setIsAnalyzing(false);
-        }, "image/jpeg", 0.9);
+            return;
+        }
+
+        // Show preview of first frame
+        const previewUrl = URL.createObjectURL(frames[0]);
+        setCapturePreview(previewUrl);
+
+        // Pick the largest frame (heuristic for best quality — less blur = more detail = larger JPEG)
+        const bestFrame = frames.reduce((a, b) => a.size > b.size ? a : b);
+        const file = new File([bestFrame], "capture.jpg", { type: "image/jpeg" });
+
+        try {
+            const res = await analyzeImage(token, file);
+            if (res.success) {
+                setResult({
+                    type: "face",
+                    need_label: res.need_label,
+                    need_description: res.need_description,
+                    confidence: res.confidence,
+                    secondary_need: res.secondary_need,
+                    all_needs: res.all_needs,
+                    distress_score: res.distress_score,
+                    distress_intensity: res.distress_intensity,
+                    stress_features: res.stress_features,
+                    expression: res.expression,
+                    expression_confidence: res.expression_confidence,
+                    raw: res as unknown as Record<string, unknown>,
+                });
+            } else {
+                setError(res.message || "Analysis failed");
+            }
+        } catch {
+            setError("Failed to connect to analysis server");
+        }
+        setIsAnalyzing(false);
     }, [token]);
 
     // ─── Audio ──────────────────────────────────────────────
@@ -180,10 +257,25 @@ export default function AnalyzePage() {
     }, [result, token, selectedChild]);
 
     useEffect(() => {
-        return () => { stopCamera(); if (timerRef.current) clearInterval(timerRef.current); };
+        return () => {
+            stopCamera();
+            if (timerRef.current) clearInterval(timerRef.current);
+        };
     }, [stopCamera]);
 
+    // Clean up capture preview URL
+    useEffect(() => {
+        return () => {
+            if (capturePreview) URL.revokeObjectURL(capturePreview);
+        };
+    }, [capturePreview]);
 
+    // Stop camera when switching tabs
+    useEffect(() => {
+        if (activeTab !== "camera" && cameraActive) {
+            stopCamera();
+        }
+    }, [activeTab, cameraActive, stopCamera]);
 
     // ─── Error type helpers ───────────────────────────────────
     function getErrorMeta(err: string): { icon: React.ReactNode; title: string; tips: string[] } {
@@ -258,20 +350,80 @@ export default function AnalyzePage() {
                 {activeTab === "camera" && (
                     <div className="space-y-4">
                         <div className="relative bg-gray-900 rounded-2xl overflow-hidden aspect-video max-w-xl mx-auto">
-                            <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${cameraActive ? "block" : "hidden"}`} />
+                            {/* Video feed */}
+                            <video ref={videoRef} autoPlay playsInline muted className={`w-full h-full object-cover ${cameraActive && !capturePreview ? "block" : "hidden"}`} />
                             <canvas ref={canvasRef} className="hidden" />
-                            {!cameraActive && (
+
+                            {/* Capture preview */}
+                            {capturePreview && (
+                                <img src={capturePreview} alt="Captured frame" className="w-full h-full object-cover" />
+                            )}
+
+                            {/* Face guide overlay */}
+                            {cameraActive && !capturePreview && (
+                                <div className="absolute inset-0 pointer-events-none">
+                                    {/* Center oval guide */}
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <div
+                                            className={`w-48 h-60 sm:w-56 sm:h-72 rounded-[50%] border-[3px] transition-all duration-500 ${
+                                                faceDetected
+                                                    ? "border-green-400 shadow-[0_0_20px_rgba(74,222,128,0.3)]"
+                                                    : "border-white/40 animate-pulse"
+                                            }`}
+                                        />
+                                    </div>
+
+                                    {/* Detection status badge */}
+                                    <div className={`absolute top-4 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 transition-all duration-300 ${
+                                        faceDetected
+                                            ? "bg-green-500/80 text-white"
+                                            : "bg-black/50 text-white/70"
+                                    }`}>
+                                        {faceDetected ? (
+                                            <>
+                                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                                Face detected
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Eye className="w-3.5 h-3.5" />
+                                                Position baby&apos;s face in the oval
+                                            </>
+                                        )}
+                                    </div>
+
+                                    {/* Corner brackets */}
+                                    <div className="absolute top-[15%] left-[20%] w-6 h-6 border-t-2 border-l-2 border-white/30 rounded-tl-lg" />
+                                    <div className="absolute top-[15%] right-[20%] w-6 h-6 border-t-2 border-r-2 border-white/30 rounded-tr-lg" />
+                                    <div className="absolute bottom-[15%] left-[20%] w-6 h-6 border-b-2 border-l-2 border-white/30 rounded-bl-lg" />
+                                    <div className="absolute bottom-[15%] right-[20%] w-6 h-6 border-b-2 border-r-2 border-white/30 rounded-br-lg" />
+                                </div>
+                            )}
+
+                            {/* Camera off placeholder */}
+                            {!cameraActive && !capturePreview && (
                                 <div className="absolute inset-0 flex flex-col items-center justify-center text-white/60">
-                                    <Camera className="w-12 h-12 mb-3 opacity-50" />
-                                    <p className="text-sm">Camera preview will appear here</p>
+                                    <div className="w-20 h-20 rounded-full bg-white/5 flex items-center justify-center mb-4 border border-white/10">
+                                        <User className="w-10 h-10 opacity-40" />
+                                    </div>
+                                    <p className="text-sm font-medium">Camera preview will appear here</p>
+                                    <p className="text-xs text-white/40 mt-1">Position your baby&apos;s face in the guide oval</p>
                                 </div>
                             )}
                         </div>
+
+                        {/* Camera controls */}
                         <div className="flex justify-center gap-3">
                             {!cameraActive ? (
                                 <button onClick={startCamera} className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-[#F0897A] to-[#EFA192] text-white font-medium hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 shadow-[0_8px_20px_-6px_rgba(240,137,122,0.5)]">
                                     <Camera className="w-4 h-4" /> Start Camera
                                 </button>
+                            ) : capturePreview ? (
+                                <>
+                                    <button onClick={() => { setCapturePreview(null); }} className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-white/80 border border-slate-200 text-[#4a4b5e] font-medium hover:bg-white transition-colors">
+                                        <RefreshCcw className="w-4 h-4" /> Retake
+                                    </button>
+                                </>
                             ) : (
                                 <>
                                     <button onClick={captureAndAnalyze} disabled={isAnalyzing} className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-[#F0897A] to-[#EFA192] text-white font-medium hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 shadow-[0_8px_20px_-6px_rgba(240,137,122,0.5)] disabled:opacity-50 disabled:cursor-not-allowed">
@@ -283,6 +435,13 @@ export default function AnalyzePage() {
                                 </>
                             )}
                         </div>
+
+                        {/* Multi-frame capture info */}
+                        {cameraActive && !capturePreview && (
+                            <p className="text-center text-xs text-slate-400">
+                                📸 Captures 3 frames automatically and picks the sharpest one for analysis
+                            </p>
+                        )}
                     </div>
                 )}
 
@@ -360,7 +519,7 @@ export default function AnalyzePage() {
                                         ))}
                                     </ul>
                                 )}
-                                <button onClick={() => { setError(null); setResult(null); setSaved(false); setFeedbackGiven(false); }}
+                                <button onClick={() => { setError(null); setResult(null); setSaved(false); setFeedbackGiven(false); setCapturePreview(null); }}
                                     className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-red-700 bg-red-100 hover:bg-red-200 border border-red-200 transition-colors">
                                     <RefreshCcw className="w-3.5 h-3.5" /> Try Again
                                 </button>
@@ -387,9 +546,17 @@ export default function AnalyzePage() {
                         setResult(null);
                         setError(null);
                         setSaved(false);
+                        setCapturePreview(null);
                     }}
                 />
             )}
         </div>
     );
+}
+
+// Suppress console.log in production, noop in dev
+function logger(msg: string) {
+    if (process.env.NODE_ENV === "development") {
+        console.log(`[AnalyzePage] ${msg}`);
+    }
 }

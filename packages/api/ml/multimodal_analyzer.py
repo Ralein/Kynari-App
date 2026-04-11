@@ -6,7 +6,7 @@ For video files:
 3. Runs face distress analyzer on best frame
 4. Runs audio need classifier on audio track
 5. Incorporates contextual metadata (last feed, last diaper, last nap)
-6. Combines with weighted fusion: audio 70%, face 15%, context 15%
+6. Combines with confidence-weighted fusion: audio 60%, face 25%, context 15%
 
 For audio-only or image-only inputs, partial fusion is used.
 """
@@ -25,9 +25,9 @@ logger = logging.getLogger(__name__)
 # Need labels for the system
 NEED_LABELS = ["hungry", "diaper", "sleepy", "pain", "calm"]
 
-# Fusion weights
-AUDIO_WEIGHT = 0.70
-FACE_WEIGHT = 0.15
+# Fusion weights (rebalanced — face is now more reliable with geometric features)
+AUDIO_WEIGHT = 0.60
+FACE_WEIGHT = 0.25
 CONTEXT_WEIGHT = 0.15
 
 
@@ -151,8 +151,10 @@ def fuse_predictions(
 ) -> dict[str, Any]:
     """Fuse audio need prediction + face distress + context into final prediction.
 
-    Weights: audio 70%, face 15%, context 15%.
+    Base weights: audio 60%, face 25%, context 15%.
+    Face now gets more weight because geometric features are infant-specific.
     When a modality is missing, its weight is redistributed.
+    When a modality has very low confidence (<0.3), its weight is reduced dynamically.
     """
     # Compute context scores
     context_scores = compute_context_scores(context)
@@ -178,10 +180,23 @@ def fuse_predictions(
     # Determine effective weights based on available modalities
     if has_audio and has_face:
         w_audio, w_face, w_ctx = AUDIO_WEIGHT, FACE_WEIGHT, CONTEXT_WEIGHT
+
+        # Confidence-based adjustment: if one modality is very uncertain, shift weight
+        audio_conf = audio_result.get("confidence", 0.5) if has_audio else 0
+        face_conf = face_result.get("confidence", 0.5) if has_face else 0
+
+        if audio_conf < 0.3 and face_conf >= 0.4:
+            # Audio is uncertain, trust face more
+            w_audio, w_face, w_ctx = 0.40, 0.40, 0.20
+        elif face_conf < 0.3 and audio_conf >= 0.4:
+            # Face is uncertain, trust audio more
+            w_audio, w_face, w_ctx = 0.75, 0.10, 0.15
+
     elif has_audio:
         w_audio, w_face, w_ctx = 0.85, 0.0, 0.15
     else:
-        w_audio, w_face, w_ctx = 0.0, 0.40, 0.60  # Face-only is weak for needs
+        # Face-only is more reliable now with geometric features
+        w_audio, w_face, w_ctx = 0.0, 0.50, 0.50
 
     # Start with zeros
     fused_scores = {label: 0.0 for label in NEED_LABELS}
@@ -192,16 +207,22 @@ def fuse_predictions(
         for label in NEED_LABELS:
             fused_scores[label] += w_audio * audio_needs.get(label, 0.0)
 
-    # Face contribution — distress amplifies non-calm needs
+    # Face contribution — use face's need prediction directly (not just distress)
     if has_face:
+        face_needs = face_result.get("all_needs", {})
         distress = face_result.get("distress_score", 0.0)
-        # High distress redistributes face weight away from "calm"
-        for label in NEED_LABELS:
-            if label == "calm":
-                fused_scores[label] += w_face * (1.0 - distress)
-            else:
-                # Distribute distress evenly among non-calm needs
-                fused_scores[label] += w_face * (distress / 4.0)
+
+        if face_needs:
+            # Use the face analyzer's own need predictions
+            for label in NEED_LABELS:
+                fused_scores[label] += w_face * face_needs.get(label, 0.0)
+        else:
+            # Fallback: distress redistributes face weight
+            for label in NEED_LABELS:
+                if label == "calm":
+                    fused_scores[label] += w_face * (1.0 - distress)
+                else:
+                    fused_scores[label] += w_face * (distress / 4.0)
 
     # Context contribution
     for label in NEED_LABELS:
@@ -245,6 +266,8 @@ def fuse_predictions(
             "need_label": audio_result.get("need_label"),
             "confidence": audio_result.get("confidence"),
             "audio_features": audio_result.get("audio_features"),
+            "cry_detection": audio_result.get("cry_detection"),
+            "model_used": audio_result.get("model_used"),
         }
         result["spectrogram_b64"] = audio_result.get("spectrogram_b64")
 
@@ -253,6 +276,8 @@ def fuse_predictions(
             "distress_score": face_result.get("distress_score"),
             "distress_intensity": face_result.get("distress_intensity"),
             "stress_features": face_result.get("stress_features"),
+            "expression": face_result.get("expression"),
+            "geometric_features": face_result.get("geometric_features"),
         }
 
     if context:

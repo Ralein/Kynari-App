@@ -25,9 +25,8 @@ dependencies = [
     "python-multipart>=0.0.6",
     "numpy>=1.24.0",
     "matplotlib>=3.8.0",
-    # Face analysis (DeepFace wraps RetinaFace + emotion classifier)
-    "deepface>=0.0.93",
-    "tf-keras>=2.16.0",
+    # Face analysis (MediaPipe Face Mesh — 468 3D landmarks, 15ms inference)
+    "mediapipe>=0.10.0",
     "opencv-python>=4.8.0",
     # AI reports
     "langchain-core>=0.1.0",
@@ -40,3 +39,10 @@ dev = [
     "pytest-asyncio>=0.24.0",
     "ruff>=0.8.0",
 ]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["ml", "models", "routers", "services", "middleware", "migrations"]

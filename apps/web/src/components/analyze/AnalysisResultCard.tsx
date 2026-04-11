@@ -1,5 +1,5 @@
 import { type NeedLabel, DISTRESS_SCALE, NEED_COLORS, NEED_EMOJI, NEED_ADVICE } from "@kynari/shared";
-import { CheckCircle2, Stethoscope, Lightbulb, Volume2, ThumbsUp, ThumbsDown, BarChart2, Link2, Radio, ScanFace, FileStack, Save, Laugh, Frown, Angry, Annoyed, Flame, Smile, Meh } from "lucide-react";
+import { CheckCircle2, Stethoscope, Lightbulb, Volume2, ThumbsUp, ThumbsDown, BarChart2, Link2, Radio, ScanFace, FileStack, Save, Activity, Mic2, AudioLines } from "lucide-react";
 
 export type AnalysisResult = {
     type: "face" | "audio" | "video";
@@ -31,17 +31,20 @@ function getDistressInfo(level: number) {
     return DISTRESS_SCALE.find(s => level >= s.min && level <= s.max) || DISTRESS_SCALE[0];
 }
 
-function ExpressionIcon({ expression, className }: { expression: string; className?: string }) {
-    const map: Record<string, React.ReactNode> = {
-        happy: <Laugh className={className} />,
-        sad: <Frown className={className} />,
-        angry: <Angry className={className} />,
-        fear: <Annoyed className={className} />,
-        disgust: <Flame className={className} />,
-        surprise: <Smile className={className} />,
-        neutral: <Meh className={className} />,
+// Map expression strings to emoji for display
+function getExpressionEmoji(expression: string): string {
+    const map: Record<string, string> = {
+        crying: "😭",
+        distressed: "😫",
+        angry: "😠",
+        sad: "😢",
+        fussy: "😤",
+        uncomfortable: "😟",
+        neutral: "😐",
+        calm: "😊",
+        content: "🙂",
     };
-    return <>{map[expression] ?? <Meh className={className} />}</>;
+    return map[expression] ?? "😐";
 }
 
 interface AnalysisResultCardProps {
@@ -63,9 +66,13 @@ export function AnalysisResultCard({ result, childrenData, selectedChild, feedba
     const needKey = (result.need_label || (result.distress_score !== undefined ? (result.distress_score > 0.5 ? "pain" : "calm") : "calm")) as NeedLabel;
     const advice = NEED_ADVICE[needKey];
 
+    // Extract cry detection info from raw result
+    const cryDetection = result.raw?.cry_detection as { is_crying?: boolean; cry_confidence?: number; audio_type?: string } | undefined;
+    const modelUsed = result.raw?.model_used as string | undefined;
+
     return (
         <div className="space-y-4 animate-slide-up">
-            {/* ... distress scale ... */}
+            {/* Distress Assessment */}
             <div className="bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-6 sm:p-8">
                 <div className="flex items-center gap-2 mb-5">
                     <Stethoscope className="w-5 h-5 text-[#6B48C8]" />
@@ -107,7 +114,7 @@ export function AnalysisResultCard({ result, childrenData, selectedChild, feedba
                         {result.type === "face" ? "Face-Based Need Prediction" : "Cry Analysis"}
                     </p>
                     <p className="text-xs text-slate-500 mb-4">
-                        {result.type === "face" ? "Predicted using facial expression AI — for best accuracy, also record audio" : "Predicted from audio cry patterns using AI"}
+                        {result.type === "face" ? "Predicted using facial landmark geometry (NFCS-aligned)" : "Predicted from audio cry patterns using AI"}
                     </p>
                     <div className="space-y-3">
                         {Object.entries(result.all_needs).sort(([, a], [, b]) => b - a).map(([label, score]) => {
@@ -133,36 +140,80 @@ export function AnalysisResultCard({ result, childrenData, selectedChild, feedba
             {/* Expression */}
             {result.expression && (
                 <div className="bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-5 flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center shrink-0">
-                        <ExpressionIcon expression={result.expression} className="w-5 h-5 text-purple-600" />
+                    <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center shrink-0 text-xl">
+                        {getExpressionEmoji(result.expression)}
                     </div>
                     <div>
                         <p className="text-sm font-bold text-[#1a1b2e] capitalize font-[family-name:var(--font-sans)]">
                             Expression: {result.expression}
                         </p>
                         <p className="text-xs text-slate-500">
-                            Detected by AI facial expression model{result.expression_confidence ? ` (${Math.round(result.expression_confidence * 100)}% confidence)` : ""}
+                            {result.type === "face"
+                                ? "Detected from facial landmark geometry"
+                                : `Detected by AI facial expression model${result.expression_confidence ? ` (${Math.round(result.expression_confidence * 100)}% confidence)` : ""}`
+                            }
                         </p>
                     </div>
                 </div>
             )}
 
-            {/* Action Units */}
+            {/* Cry Detection Info (audio results) */}
+            {result.type === "audio" && cryDetection && (
+                <div className={`backdrop-blur-sm border rounded-3xl p-5 flex items-center gap-4 ${
+                    cryDetection.is_crying
+                        ? "bg-amber-50/70 border-amber-200/40"
+                        : "bg-emerald-50/70 border-emerald-200/40"
+                }`}>
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                        cryDetection.is_crying ? "bg-amber-100" : "bg-emerald-100"
+                    }`}>
+                        <AudioLines className={`w-5 h-5 ${
+                            cryDetection.is_crying ? "text-amber-600" : "text-emerald-600"
+                        }`} />
+                    </div>
+                    <div className="flex-1">
+                        <p className={`text-sm font-bold capitalize font-[family-name:var(--font-sans)] ${
+                            cryDetection.is_crying ? "text-amber-900" : "text-emerald-900"
+                        }`}>
+                            Audio type: {cryDetection.audio_type || "unknown"}
+                        </p>
+                        <p className={`text-xs ${
+                            cryDetection.is_crying ? "text-amber-700" : "text-emerald-700"
+                        }`}>
+                            Cry confidence: {Math.round((cryDetection.cry_confidence ?? 0) * 100)}%
+                            {modelUsed && (
+                                <span className="ml-2 opacity-60">· Model: {modelUsed.split("/").pop()}</span>
+                            )}
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {/* Facial Action Units (geometric features) */}
             {result.type === "face" && result.stress_features && Object.keys(result.stress_features).length > 0 && (
                 <div className="bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-6 sm:p-8">
                     <div className="flex items-center gap-2 mb-1">
-                        <BarChart2 className="w-4 h-4 text-[#6B48C8]" />
-                        <p className="text-sm font-bold text-[#1a1b2e] font-[family-name:var(--font-sans)]">Active Facial Action Units</p>
+                        <Activity className="w-4 h-4 text-[#6B48C8]" />
+                        <p className="text-sm font-bold text-[#1a1b2e] font-[family-name:var(--font-sans)]">Facial Action Units (NFCS)</p>
                     </div>
-                    <p className="text-xs text-slate-500 mb-4">ML-detected muscle activations (from neural network)</p>
+                    <p className="text-xs text-slate-500 mb-4">Geometric feature activations from 468-point face mesh</p>
                     <div className="space-y-2.5">
                         {Object.entries(result.stress_features).sort(([, a], [, b]) => b - a).map(([label, score]) => {
                             const pct = Math.round(score * 100);
+                            const getBarColor = (p: number) => {
+                                if (p > 60) return "#EF4444"; // Red — high activation
+                                if (p > 40) return "#F97316"; // Orange — moderate
+                                if (p > 25) return "#EAB308"; // Yellow — mild
+                                return "#84CC16"; // Green — low
+                            };
                             return (
                                 <div key={label} className="flex items-center gap-3">
-                                    <span className="w-40 text-xs font-semibold text-[#4a4b5e]">{label.replace(/([A-Z])/g, " $1").replace(/^./, s => s.toUpperCase())}</span>
+                                    <span className="w-48 text-xs font-semibold text-[#4a4b5e] truncate">{label}</span>
                                     <div className="flex-1 h-5 bg-gray-100 rounded-md overflow-hidden">
-                                        <div className="h-full rounded-md transition-all duration-700" style={{ width: `${Math.max(pct, 3)}%`, backgroundColor: pct > 50 ? "#8B5CF6" : pct > 25 ? "#A78BFA" : "#C4B5FD" }} />
+                                        <div
+                                            className="h-full rounded-md transition-all duration-700"
+                                            style={{ width: `${Math.max(pct, 3)}%`, backgroundColor: getBarColor(pct) }}
+                                        />
                                     </div>
                                     <span className="text-xs font-bold text-slate-500 w-10 text-right">{pct}%</span>
                                 </div>
