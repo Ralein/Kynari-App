@@ -89,7 +89,7 @@ export default function AnalyzePage() {
                     }, 500);
                 } catch {
                     // FaceDetector not supported, fall back to no detection feedback
-                    logger("FaceDetector API not available, skipping live detection");
+                    console.debug("FaceDetector API not available, skipping live detection");
                 }
             }
         } catch {

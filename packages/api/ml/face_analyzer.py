@@ -102,21 +102,35 @@ FACE_RIGHT = 454           # Right side
 
 
 def _ensure_face_mesh():
-    """Lazy-load MediaPipe Face Mesh on first use."""
+    """Lazy-load MediaPipe FaceLandmarker Task on first use."""
     global _face_mesh
     if _face_mesh is not None:
         return _face_mesh
 
     try:
+        import os
         import mediapipe as mp
-        _face_mesh = mp.solutions.face_mesh.FaceMesh(
-            static_image_mode=True,
-            max_num_faces=1,
-            refine_landmarks=True,   # Enables iris landmarks for better eye tracking
-            min_detection_confidence=0.3,  # Lower threshold for infant faces
-            min_tracking_confidence=0.3,
-        )
-        logger.info("MediaPipe Face Mesh loaded successfully")
+        
+        BaseOptions = mp.tasks.BaseOptions
+        FaceLandmarker = mp.tasks.vision.FaceLandmarker
+        FaceLandmarkerOptions = mp.tasks.vision.FaceLandmarkerOptions
+        VisionRunningMode = mp.tasks.vision.RunningMode
+        
+        model_path = os.path.join(os.path.dirname(__file__), "face_landmarker.task")
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Missing MediaPipe landmarker model: {model_path}")
+            
+        options = FaceLandmarkerOptions(
+            base_options=BaseOptions(model_asset_path=model_path),
+            running_mode=VisionRunningMode.IMAGE,
+            num_faces=1,
+            min_face_detection_confidence=0.15,
+            min_face_presence_confidence=0.15,
+            output_face_blendshapes=False,
+            output_facial_transformation_matrixes=False)
+
+        _face_mesh = FaceLandmarker.create_from_options(options)
+        logger.info("MediaPipe FaceLandmarker Task loaded successfully")
         return _face_mesh
     except ImportError as e:
         raise RuntimeError(
@@ -136,10 +150,13 @@ def _midpoint(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return (a + b) / 2.0
 
 
-def _landmarks_to_array(landmarks, w: int, h: int) -> np.ndarray:
-    """Convert MediaPipe landmarks to a (468, 3) numpy array in pixel coords."""
-    pts = np.zeros((len(landmarks.landmark), 3), dtype=np.float64)
-    for i, lm in enumerate(landmarks.landmark):
+def _landmarks_to_array(landmarks_list, w: int, h: int) -> np.ndarray:
+    """Convert MediaPipe landmarks to a feature numpy array in pixel coords.
+    Handles both legacy `landmarks.landmark` and new Task API flat lists.
+    """
+    pts_list = landmarks_list.landmark if hasattr(landmarks_list, "landmark") else landmarks_list
+    pts = np.zeros((len(pts_list), 3), dtype=np.float64)
+    for i, lm in enumerate(pts_list):
         pts[i] = [lm.x * w, lm.y * h, lm.z * w]  # z is scaled to image width
     return pts
 
@@ -451,9 +468,41 @@ def analyze_face(image: Image.Image) -> dict[str, Any]:
             "message": QUALITY_ERROR_MESSAGES["poor_quality"],
         }
 
-    # ── 1. Run MediaPipe Face Mesh ────────────────────────────
+    # ── 1. Run MediaPipe FaceLandmarker (with fallbacks) ─────────────────
+    import mediapipe as mp
+    
+    def try_detect(img_arr):
+        mp_img = mp.Image(image_format=mp.ImageFormat.SRGB, data=img_arr)
+        return face_mesh.detect(mp_img)
+        
     try:
-        results = face_mesh.process(img_array)
+        results = try_detect(img_array)
+        
+        # Fallback 1: Contrast enhancement (CLAHE) for poor lighting
+        if not getattr(results, "face_landmarks", None) or len(results.face_landmarks) == 0:
+            import cv2
+            logger.debug("Face not detected on first pass. Trying CLAHE contrast enhancement...")
+            try:
+                lab = cv2.cvtColor(img_array, cv2.COLOR_RGB2LAB)
+                l, a, b = cv2.split(lab)
+                clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+                cl = clahe.apply(l)
+                limg = cv2.merge((cl, a, b))
+                enhanced_img = cv2.cvtColor(limg, cv2.COLOR_LAB2RGB)
+                results = try_detect(enhanced_img)
+            except Exception as e:
+                logger.debug(f"CLAHE fallback failed: {e}")
+                
+        # Fallback 2: Grayscale (removes color noise)
+        if not getattr(results, "face_landmarks", None) or len(results.face_landmarks) == 0:
+            import cv2
+            logger.debug("Face not detected on second pass. Trying Grayscale fallback...")
+            try:
+                gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+                gray_rgb = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
+                results = try_detect(gray_rgb)
+            except Exception as e:
+                logger.debug(f"Grayscale fallback failed: {e}")
     except Exception as e:
         logger.error(f"MediaPipe Face Mesh failed: {e}")
         return {
@@ -465,8 +514,8 @@ def analyze_face(image: Image.Image) -> dict[str, Any]:
             ),
         }
 
-    # Check if any face was detected
-    if not results.multi_face_landmarks:
+    # Check if any face was detected after all passes
+    if not getattr(results, "face_landmarks", None) or len(results.face_landmarks) == 0:
         return {
             "success": False,
             "error": "no_face_detected",
@@ -474,7 +523,7 @@ def analyze_face(image: Image.Image) -> dict[str, Any]:
         }
 
     # Take the first (and only, since max_num_faces=1) face
-    face_landmarks = results.multi_face_landmarks[0]
+    face_landmarks = results.face_landmarks[0]
 
     # ── 2. Convert landmarks to pixel coordinates ─────────────
     pts = _landmarks_to_array(face_landmarks, w, h)
