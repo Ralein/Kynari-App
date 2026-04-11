@@ -1,5 +1,5 @@
 import { type NeedLabel, DISTRESS_SCALE, NEED_COLORS, NEED_EMOJI, NEED_ADVICE } from "@kynari/shared";
-import { CheckCircle2, Stethoscope, Lightbulb, Volume2, ThumbsUp, ThumbsDown, BarChart2, Link2, Radio, ScanFace, FileStack, Save, Activity, Mic2, AudioLines } from "lucide-react";
+import { CheckCircle2, Stethoscope, Lightbulb, Volume2, ThumbsUp, ThumbsDown, Link2, Radio, ScanFace, FileStack, Save, Activity, AudioLines } from "lucide-react";
 
 export type AnalysisResult = {
     type: "face" | "audio" | "video";

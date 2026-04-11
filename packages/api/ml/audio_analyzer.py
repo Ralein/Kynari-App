@@ -159,7 +159,6 @@ def detect_crying(y: np.ndarray, sr: int) -> dict[str, Any]:
     """
     import librosa
 
-    duration = len(y) / sr
     rms = float(np.sqrt(np.mean(y**2)))
 
     # Energy-based silence detection

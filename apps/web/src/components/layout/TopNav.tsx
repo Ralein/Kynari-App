@@ -3,14 +3,12 @@
 import { UserButton, useUser } from "@clerk/nextjs";
 import Link from "next/link";
 import Image from "next/image";
-import { LayoutDashboard, Search } from "lucide-react";
 import { useChildren } from "@/lib/hooks";
 
 export function TopNav() {
     const { user } = useUser();
-    const { data: children } = useChildren();
+    const { data: _children } = useChildren(); // pre-fetch for SWR cache
     const email = user?.emailAddresses[0]?.emailAddress;
-    const hasChildren = children && children.length > 0;
 
     return (
         <header className="sticky top-0 z-50 bg-white/60 backdrop-blur-md border-b border-white/80 shadow-[0_-10px_40px_rgba(0,0,0,0.03)]">

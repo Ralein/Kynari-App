@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useToken, useChildren } from "@/lib/hooks";
 import {
     analyzeImage,
@@ -270,12 +271,19 @@ export default function AnalyzePage() {
         };
     }, [capturePreview]);
 
-    // Stop camera when switching tabs
+    // Stop camera when switching tabs (avoid calling setState within effect)
     useEffect(() => {
         if (activeTab !== "camera" && cameraActive) {
-            stopCamera();
+            // Stop the stream directly via the ref to avoid setState-in-effect
+            const stream = videoRef.current?.srcObject as MediaStream | null;
+            if (stream) {
+                stream.getTracks().forEach((t) => t.stop());
+                if (videoRef.current) videoRef.current.srcObject = null;
+            }
+            setCameraActive(false);
         }
-    }, [activeTab, cameraActive, stopCamera]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeTab]);
 
     // ─── Error type helpers ───────────────────────────────────
     function getErrorMeta(err: string): { icon: React.ReactNode; title: string; tips: string[] } {
@@ -356,7 +364,7 @@ export default function AnalyzePage() {
 
                             {/* Capture preview */}
                             {capturePreview && (
-                                <img src={capturePreview} alt="Captured frame" className="w-full h-full object-cover" />
+                                <Image src={capturePreview} alt="Captured frame" fill className="object-cover" unoptimized />
                             )}
 
                             {/* Face guide overlay */}
