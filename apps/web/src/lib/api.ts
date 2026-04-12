@@ -584,3 +584,27 @@ export async function deleteMilestone(
         method: "DELETE",
     });
 }
+
+
+// ─── Voice Speak API (Picture Book Read Aloud) ──────────────
+
+export async function speakText(
+    token: string,
+    voiceId: string,
+    text: string
+): Promise<Blob> {
+    const res = await fetch(`${API_BASE}/api/voice/speak`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ voice_id: voiceId, text }),
+    });
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(error.detail || `TTS speak failed: ${res.status}`);
+    }
+    return res.blob();
+}
+

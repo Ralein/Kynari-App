@@ -1,6 +1,6 @@
 "use client";
 
-import { Trash2, type LucideIcon } from "lucide-react";
+import { Trash2, Loader2, type LucideIcon } from "lucide-react";
 
 interface MilestoneTypeInfo {
     id: string;
@@ -18,6 +18,7 @@ interface MilestoneCardProps {
     caption?: string;
     typeInfo: MilestoneTypeInfo;
     onDelete: (id: string) => void;
+    isDeleting?: boolean;
 }
 
 export function MilestoneCard({
@@ -28,11 +29,12 @@ export function MilestoneCard({
     caption,
     typeInfo,
     onDelete,
+    isDeleting = false,
 }: MilestoneCardProps) {
     const Icon = typeInfo.icon;
 
     return (
-        <div className="bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-5 group hover:shadow-[0_8px_32px_-4px_rgba(0,0,0,0.1)] transition-all duration-300">
+        <div className={`bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-5 group hover:shadow-[0_8px_32px_-4px_rgba(0,0,0,0.1)] transition-all duration-300 ${isDeleting ? "opacity-50 scale-95" : ""}`}>
             <div className="flex items-start gap-3">
                 <div
                     className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0"
@@ -61,9 +63,14 @@ export function MilestoneCard({
                 </div>
                 <button
                     onClick={() => onDelete(id)}
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-slate-200 hover:text-red-400 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100 shrink-0"
+                    disabled={isDeleting}
+                    className="w-7 h-7 rounded-full flex items-center justify-center text-slate-200 hover:text-red-400 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100 shrink-0 disabled:opacity-100 disabled:cursor-not-allowed"
                 >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    {isDeleting ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-slate-400" />
+                    ) : (
+                        <Trash2 className="w-3.5 h-3.5" />
+                    )}
                 </button>
             </div>
             {caption && (
@@ -76,3 +83,4 @@ export function MilestoneCard({
         </div>
     );
 }
+

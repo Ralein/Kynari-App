@@ -16,6 +16,7 @@ interface MilestoneGridProps {
     totalMilestones: number;
     types: MilestoneTypeInfo[];
     onDelete: (id: string) => void;
+    deletingIds?: Set<string>;
 }
 
 export function MilestoneGrid({
@@ -23,6 +24,7 @@ export function MilestoneGrid({
     totalMilestones,
     types,
     onDelete,
+    deletingIds = new Set(),
 }: MilestoneGridProps) {
     const getMilestoneTypeInfo = (type: string) => {
         const t = types.find((mt) => mt.id === type);
@@ -55,6 +57,7 @@ export function MilestoneGrid({
                             {...milestone}
                             typeInfo={getMilestoneTypeInfo(milestone.type)}
                             onDelete={onDelete}
+                            isDeleting={deletingIds.has(milestone.id)}
                         />
                     ))}
                 </div>
@@ -62,3 +65,4 @@ export function MilestoneGrid({
         </div>
     );
 }
+

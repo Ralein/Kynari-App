@@ -1,15 +1,18 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { getBook, type BookResponse } from "@/lib/api";
+import { getBook, getVoices, speakText, type BookResponse, type VoiceInfo } from "@/lib/api";
 import {
     ChevronRight,
     ChevronLeft,
     BookOpen,
     Loader2,
+    Volume2,
+    VolumeX,
+    Mic,
 } from "lucide-react";
 
 export default function BookReaderPage() {
@@ -21,18 +24,88 @@ export default function BookReaderPage() {
     const [loading, setLoading] = useState(true);
     const [currentPage, setCurrentPage] = useState(0);
 
+    // Read Aloud state
+    const [voices, setVoices] = useState<VoiceInfo[]>([]);
+    const [selectedVoice, setSelectedVoice] = useState("af_sarah");
+    const [isReading, setIsReading] = useState(false);
+    const [audioUrl, setAudioUrl] = useState<string | null>(null);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+
     useEffect(() => {
         async function load() {
             try {
                 const token = await getToken();
                 if (!token) return;
-                const data = await getBook(token, bookId);
-                setBook(data);
+                const [bookData, voiceList] = await Promise.all([
+                    getBook(token, bookId),
+                    getVoices(token),
+                ]);
+                setBook(bookData);
+                setVoices(voiceList);
             } catch { /* silent */ }
             finally { setLoading(false); }
         }
         load();
     }, [getToken, bookId]);
+
+    // Cleanup audio URL on unmount
+    useEffect(() => {
+        return () => {
+            if (audioUrl) URL.revokeObjectURL(audioUrl);
+        };
+    }, [audioUrl]);
+
+    // Stop audio when changing pages
+    const stopAudio = useCallback(() => {
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0;
+        }
+        if (audioUrl) {
+            URL.revokeObjectURL(audioUrl);
+            setAudioUrl(null);
+        }
+        setIsReading(false);
+    }, [audioUrl]);
+
+    const handlePageChange = useCallback((newPage: number) => {
+        stopAudio();
+        setCurrentPage(newPage);
+    }, [stopAudio]);
+
+    const handleReadAloud = async () => {
+        if (!book) return;
+
+        // If already reading, stop
+        if (isReading) {
+            stopAudio();
+            return;
+        }
+
+        const pageText = book.pages[currentPage]?.text;
+        if (!pageText) return;
+
+        setIsReading(true);
+        try {
+            const token = await getToken();
+            if (!token) { setIsReading(false); return; }
+
+            const blob = await speakText(token, selectedVoice, pageText);
+            const url = URL.createObjectURL(blob);
+
+            // Clean previous URL
+            if (audioUrl) URL.revokeObjectURL(audioUrl);
+            setAudioUrl(url);
+
+            const audio = new Audio(url);
+            audioRef.current = audio;
+            audio.onended = () => setIsReading(false);
+            audio.onerror = () => setIsReading(false);
+            await audio.play();
+        } catch {
+            setIsReading(false);
+        }
+    };
 
     if (loading) {
         return (
@@ -44,7 +117,7 @@ export default function BookReaderPage() {
 
     if (!book) {
         return (
-            <div className="animate-fade-in relative z-10 w-full mx-auto max-w-3xl text-center py-20">
+            <div className="animate-fade-in relative z-10 w-full mx-auto text-center py-20">
                 <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                 <p className="text-[#4a4b5e] font-medium">Book not found</p>
                 <Link href="/soothe/stories" className="text-sm text-[#F0897A] font-semibold mt-2 inline-block">
@@ -69,20 +142,70 @@ export default function BookReaderPage() {
     ];
 
     return (
-        <div className="animate-fade-in relative z-10 w-full mx-auto max-w-3xl space-y-5">
+        <div className="animate-fade-in relative z-10 w-full mx-auto space-y-6">
             {/* Breadcrumb */}
-            <div className="flex items-center gap-1.5 text-sm text-slate-500 font-medium">
-                <Link href="/soothe" className="hover:text-[#1a1b2e] transition-colors">
-                    Soothe
-                </Link>
+            <div className="flex items-center gap-1.5 text-sm text-slate-500">
+                <Link href="/dashboard" className="hover:text-[#6B48C8] transition-colors">Dashboard</Link>
                 <ChevronRight className="w-3.5 h-3.5" />
-                <Link href="/soothe/stories" className="hover:text-[#1a1b2e] transition-colors">
-                    Stories
-                </Link>
+                <Link href="/soothe" className="hover:text-[#6B48C8] transition-colors">Soothe</Link>
+                <ChevronRight className="w-3.5 h-3.5" />
+                <Link href="/soothe/stories" className="hover:text-[#6B48C8] transition-colors">Stories</Link>
                 <ChevronRight className="w-3.5 h-3.5" />
                 <span className="text-[#1a1b2e] font-semibold truncate max-w-[200px]">
                     {book.title}
                 </span>
+            </div>
+
+            {/* Header with Read Aloud controls */}
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+                <div>
+                    <h1 className="text-2xl font-extrabold font-[family-name:var(--font-sans)] text-[#1a1b2e]">
+                        {book.title}
+                    </h1>
+                    <p className="text-sm text-[#4a4b5e] mt-1">
+                        {book.theme} · {book.style}
+                        {book.child_name && ` · starring ${book.child_name}`}
+                    </p>
+                </div>
+
+                {/* Read Aloud Controls */}
+                <div className="flex items-center gap-3 self-start sm:self-auto">
+                    {/* Voice selector */}
+                    <select
+                        value={selectedVoice}
+                        onChange={(e) => setSelectedVoice(e.target.value)}
+                        className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-medium text-[#1a1b2e] focus:outline-none focus:ring-2 focus:ring-[#F0897A]/20 shadow-sm"
+                    >
+                        {voices.map((v) => (
+                            <option key={v.voice_id} value={v.voice_id}>
+                                {v.name} ({v.style})
+                            </option>
+                        ))}
+                    </select>
+
+                    {/* Read Aloud button */}
+                    <button
+                        onClick={handleReadAloud}
+                        disabled={isReading && !audioRef.current}
+                        className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-200 shadow-sm ${
+                            isReading
+                                ? "bg-[#F0897A] text-white shadow-[0_8px_20px_-6px_rgba(240,137,122,0.5)] hover:bg-[#E87A6A]"
+                                : "bg-gradient-to-r from-[#F0897A] to-[#EFA192] text-white shadow-[0_8px_20px_-6px_rgba(240,137,122,0.5)] hover:shadow-lg hover:-translate-y-0.5"
+                        }`}
+                    >
+                        {isReading ? (
+                            <>
+                                <VolumeX className="w-4 h-4" />
+                                Stop
+                            </>
+                        ) : (
+                            <>
+                                <Volume2 className="w-4 h-4" />
+                                Read Aloud
+                            </>
+                        )}
+                    </button>
+                </div>
             </div>
 
             {/* Book Page */}
@@ -101,6 +224,25 @@ export default function BookReaderPage() {
                     </p>
                 </div>
 
+                {/* Reading indicator */}
+                {isReading && (
+                    <div className="mt-6 flex items-center justify-center gap-2 animate-fade-in">
+                        <div className="flex items-center gap-1">
+                            {[...Array(4)].map((_, i) => (
+                                <div
+                                    key={i}
+                                    className="w-1 bg-[#F0897A] rounded-full animate-pulse"
+                                    style={{
+                                        height: `${12 + Math.random() * 12}px`,
+                                        animationDelay: `${i * 0.15}s`,
+                                    }}
+                                />
+                            ))}
+                        </div>
+                        <span className="text-xs text-[#F0897A] font-medium ml-2">Reading aloud...</span>
+                    </div>
+                )}
+
                 {/* Illustration placeholder */}
                 <div className="mt-8 text-center">
                     <div className="inline-flex items-center gap-2 text-xs text-slate-400">
@@ -113,7 +255,7 @@ export default function BookReaderPage() {
             {/* Navigation */}
             <div className="flex items-center justify-between">
                 <button
-                    onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+                    onClick={() => handlePageChange(Math.max(0, currentPage - 1))}
                     disabled={isFirst}
                     className="flex items-center gap-2 px-5 py-3 rounded-full text-sm font-semibold transition-all duration-200 disabled:opacity-30 bg-white/70 border border-white/80 text-[#1a1b2e] hover:shadow-md hover:-translate-y-0.5"
                 >
@@ -126,7 +268,7 @@ export default function BookReaderPage() {
                     {book.pages.map((_, i) => (
                         <button
                             key={i}
-                            onClick={() => setCurrentPage(i)}
+                            onClick={() => handlePageChange(i)}
                             className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
                                 i === currentPage
                                     ? "bg-[#F0897A] w-6"
@@ -137,7 +279,7 @@ export default function BookReaderPage() {
                 </div>
 
                 <button
-                    onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
+                    onClick={() => handlePageChange(Math.min(totalPages - 1, currentPage + 1))}
                     disabled={isLast}
                     className="flex items-center gap-2 px-5 py-3 rounded-full text-sm font-semibold transition-all duration-200 disabled:opacity-30 bg-gradient-to-r from-[#F0897A] to-[#EFA192] text-white shadow-[0_8px_20px_-6px_rgba(240,137,122,0.5)] hover:shadow-lg hover:-translate-y-0.5"
                 >

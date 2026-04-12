@@ -41,6 +41,7 @@ export default function MemoryGardenPage() {
     const [loading, setLoading] = useState(true);
     const [showAdd, setShowAdd] = useState(false);
     const [creating, setCreating] = useState(false);
+    const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
 
     // Add form
     const [milestoneType, setMilestoneType] = useState("custom");
@@ -91,19 +92,37 @@ export default function MemoryGardenPage() {
     };
 
     const handleDelete = async (milestoneId: string) => {
+        // Prevent double-click: skip if already deleting this milestone
+        if (deletingIds.has(milestoneId)) return;
+
+        // Track this deletion
+        setDeletingIds((prev) => new Set(prev).add(milestoneId));
+
+        // Optimistic removal — save previous state for rollback
+        const prevGarden = garden;
+        setGarden((prev) => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                milestones: prev.milestones.filter((m) => m.id !== milestoneId),
+                total_milestones: prev.total_milestones - 1,
+            };
+        });
+
         try {
             const token = await getToken();
-            if (!token) return;
+            if (!token) throw new Error("No token");
             await deleteMilestone(token, milestoneId, selectedChild);
-            setGarden((prev) => {
-                if (!prev) return prev;
-                return {
-                    ...prev,
-                    milestones: prev.milestones.filter((m) => m.id !== milestoneId),
-                    total_milestones: prev.total_milestones - 1,
-                };
+        } catch {
+            // Revert on failure
+            setGarden(prevGarden);
+        } finally {
+            setDeletingIds((prev) => {
+                const next = new Set(prev);
+                next.delete(milestoneId);
+                return next;
             });
-        } catch { /* silent */ }
+        }
     };
 
     const getMilestoneIcon = (type: string) => {
@@ -185,6 +204,7 @@ export default function MemoryGardenPage() {
                         totalMilestones={garden?.total_milestones || 0} 
                         types={MILESTONE_TYPES} 
                         onDelete={handleDelete} 
+                        deletingIds={deletingIds}
                     />
                 </>
             )}
