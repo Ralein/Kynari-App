@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useChildren } from "@/lib/hooks";
 import { ChildCard } from "./ChildCard";
-import { Baby, Plus, Sun, Moon, CloudSun } from "lucide-react";
+import { Baby, Plus, Sun, Moon, CloudSun, Heart, Music, BookOpen, Sprout } from "lucide-react";
 
 export default function DashboardPage() {
     const { data: children, isLoading } = useChildren();
@@ -13,6 +13,8 @@ export default function DashboardPage() {
     const greeting =
         hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
     const GreetingIcon = hour < 12 ? Sun : hour < 17 ? CloudSun : Moon;
+
+    const hasChildren = !!children && children.length > 0;
 
     return (
         <div className="animate-fade-in relative z-10 w-full mx-auto">
@@ -106,6 +108,53 @@ export default function DashboardPage() {
                 </div>
 
             )}
+
+            {/* ─── Soothe & Comfort Suite Banner ──────────────────── */}
+            {!isLoading && hasChildren && (
+                <Link href="/soothe" className="block mt-8 group">
+                    <div className="relative overflow-hidden bg-gradient-to-r from-[#EAE2FB] via-[#FCECD8] to-[#FFE5E0] rounded-3xl p-6 sm:p-8 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] border border-white/60 hover:shadow-[0_8px_32px_-4px_rgba(107,72,200,0.15)] transition-all duration-300 hover:-translate-y-0.5">
+                        {/* Decorative floating icons */}
+                        <div className="absolute top-4 right-4 sm:top-6 sm:right-6 flex gap-3 opacity-20 group-hover:opacity-40 transition-opacity">
+                            <Music className="w-8 h-8 text-[#6B48C8]" />
+                            <BookOpen className="w-8 h-8 text-[#F0897A]" />
+                            <Sprout className="w-8 h-8 text-[#7BC89D]" />
+                        </div>
+
+                        <div className="flex items-center gap-4">
+                            <div className="w-14 h-14 rounded-2xl bg-white/60 backdrop-blur-sm flex items-center justify-center shadow-sm shrink-0 group-hover:scale-105 transition-transform duration-300">
+                                <Heart className="w-7 h-7 text-[#F0897A]" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <h2 className="text-xl sm:text-2xl font-extrabold text-[#1a1b2e] font-[family-name:var(--font-sans)] tracking-tight">
+                                    Soothe & Comfort Suite
+                                </h2>
+                                <p className="text-sm text-[#4a4b5e] mt-1 line-clamp-2">
+                                    Lullabies in AI voices, adaptive sleep soundscapes, personalized picture books, and a living milestone garden.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Feature pills */}
+                        <div className="flex flex-wrap gap-2 mt-4">
+                            {[
+                                { label: "Sleep Soundscape", color: "#6B48C8" },
+                                { label: "Voice Lullaby", color: "#93E2FA" },
+                                { label: "Picture Book", color: "#F3A595" },
+                                { label: "Memory Garden", color: "#7BC89D" },
+                            ].map((f) => (
+                                <span
+                                    key={f.label}
+                                    className="px-3 py-1 rounded-full text-xs font-semibold bg-white/70 backdrop-blur-sm border border-white/80"
+                                    style={{ color: f.color }}
+                                >
+                                    {f.label}
+                                </span>
+                            ))}
+                        </div>
+                    </div>
+                </Link>
+            )}
         </div>
     );
 }
+

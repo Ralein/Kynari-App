@@ -15,16 +15,12 @@ import {
 import {
     ChevronRight,
     Music,
-    Play,
-    Pause,
-    Square,
-    Mic2,
     Loader2,
-    User,
-    Check,
-    SkipForward,
-    Volume2,
 } from "lucide-react";
+import { VoiceSelector } from "@/components/voice/VoiceSelector";
+import { NowPlayingBar } from "@/components/voice/NowPlayingBar";
+import { MoodFilter } from "@/components/voice/MoodFilter";
+import { LullabyLibrary } from "@/components/voice/LullabyLibrary";
 
 const MOOD_CHIPS = [
     { id: "all", label: "All", color: "#F0897A" },
@@ -195,175 +191,41 @@ export default function VoiceLullabyPage() {
             </div>
 
             {/* Now Playing Bar */}
-            {(playingId || generating) && currentLullaby && (
-                <div className="bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-5 animate-fade-in">
-                    <div className="flex items-center gap-4 mb-3">
-                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#D6F4FF] to-[#C2ECFB] flex items-center justify-center shrink-0">
-                            {generating ? (
-                                <Loader2 className="w-6 h-6 text-[#3AADDB] animate-spin" />
-                            ) : (
-                                <Volume2 className="w-6 h-6 text-[#3AADDB]" />
-                            )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold text-[#1a1b2e] truncate">
-                                {currentLullaby.title}
-                            </p>
-                            <p className="text-xs text-slate-500">
-                                {generating ? "Generating audio..." : `Voice: ${voices.find(v => v.voice_id === selectedVoice)?.name || selectedVoice}`}
-                            </p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                            <button
-                                onClick={togglePause}
-                                disabled={generating}
-                                className="w-10 h-10 rounded-full bg-[#3AADDB] text-white flex items-center justify-center hover:bg-[#2E9AC2] transition-colors disabled:opacity-50"
-                            >
-                                {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
-                            </button>
-                            <button
-                                onClick={stopPlayback}
-                                className="w-10 h-10 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center hover:bg-slate-200 transition-colors"
-                            >
-                                <Square className="w-4 h-4" />
-                            </button>
-                        </div>
-                    </div>
-                    {/* Progress bar */}
-                    <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div
-                            className="h-full bg-gradient-to-r from-[#93E2FA] to-[#3AADDB] rounded-full transition-all duration-200"
-                            style={{ width: `${progress}%` }}
-                        />
-                    </div>
-                </div>
-            )}
+            <NowPlayingBar 
+                generating={generating}
+                playingId={playingId}
+                currentLullaby={currentLullaby}
+                isPlaying={isPlaying}
+                progress={progress}
+                selectedVoice={selectedVoice}
+                voices={voices}
+                onTogglePause={togglePause}
+                onStop={stopPlayback}
+            />
 
             {/* Voice Selector */}
-            <div className="bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-6">
-                <div className="flex items-center gap-2 mb-4">
-                    <Mic2 className="w-4 h-4 text-[#6B48C8]" />
-                    <h2 className="text-base font-bold font-[family-name:var(--font-sans)] text-[#1a1b2e]">
-                        Select Voice
-                    </h2>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                    {voices.map((voice) => (
-                        <button
-                            key={voice.voice_id}
-                            onClick={() => selectVoice(voice.voice_id)}
-                            className={`flex items-center gap-3 p-3 rounded-2xl border transition-all duration-200 ${
-                                selectedVoice === voice.voice_id
-                                    ? "bg-[#EAE2FB] border-[#6B48C8]/30 shadow-sm"
-                                    : "bg-white/50 border-white/80 hover:bg-white/80"
-                            }`}
-                        >
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                                selectedVoice === voice.voice_id ? "bg-[#6B48C8] text-white" : "bg-slate-100 text-slate-400"
-                            }`}>
-                                {selectedVoice === voice.voice_id ? (
-                                    <Check className="w-4 h-4" />
-                                ) : (
-                                    <User className="w-4 h-4" />
-                                )}
-                            </div>
-                            <div className="text-left min-w-0">
-                                <p className={`text-xs font-bold truncate ${
-                                    selectedVoice === voice.voice_id ? "text-[#6B48C8]" : "text-[#1a1b2e]"
-                                }`}>
-                                    {voice.name}
-                                </p>
-                                <p className="text-[10px] text-slate-500 truncate">{voice.style}</p>
-                            </div>
-                        </button>
-                    ))}
-                </div>
-            </div>
+            <VoiceSelector 
+                voices={voices} 
+                selectedVoiceId={selectedVoice} 
+                onSelectVoice={selectVoice} 
+            />
 
             {/* Mood Filter */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                {MOOD_CHIPS.map((chip) => (
-                    <button
-                        key={chip.id}
-                        onClick={() => setActiveMood(chip.id)}
-                        className={`px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-200 ${
-                            activeMood === chip.id
-                                ? "text-white shadow-sm"
-                                : "bg-white/70 text-slate-500 border border-white/80 hover:bg-white/90"
-                        }`}
-                        style={activeMood === chip.id ? { backgroundColor: chip.color } : undefined}
-                    >
-                        {chip.label}
-                    </button>
-                ))}
-            </div>
+            <MoodFilter 
+                chips={MOOD_CHIPS} 
+                activeMood={activeMood} 
+                onSelectMood={setActiveMood} 
+            />
 
-            {/* Lullaby Library */}
-            <div className="space-y-3">
-                {filteredLullabies.map((lullaby) => {
-                    const isActive = playingId === lullaby.id;
-                    return (
-                        <div
-                            key={lullaby.id}
-                            className={`bg-white/70 backdrop-blur-sm border shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-5 transition-all duration-300 ${
-                                isActive
-                                    ? "border-[#93E2FA]/50 bg-[#D6F4FF]/20"
-                                    : "border-white/80 hover:shadow-[0_8px_32px_-4px_rgba(0,0,0,0.1)]"
-                            }`}
-                        >
-                            <div className="flex items-center gap-4">
-                                {/* Play button */}
-                                <button
-                                    onClick={() => isActive ? (isPlaying ? togglePause() : togglePause()) : playLullaby(lullaby)}
-                                    disabled={generating && !isActive}
-                                    className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 transition-all duration-200 ${
-                                        isActive
-                                            ? "bg-[#3AADDB] text-white shadow-md"
-                                            : "bg-slate-100 text-slate-400 hover:bg-[#D6F4FF] hover:text-[#3AADDB]"
-                                    } disabled:opacity-50`}
-                                >
-                                    {isActive && generating ? (
-                                        <Loader2 className="w-5 h-5 animate-spin" />
-                                    ) : isActive && isPlaying ? (
-                                        <Pause className="w-5 h-5" />
-                                    ) : (
-                                        <Play className="w-5 h-5 ml-0.5" />
-                                    )}
-                                </button>
+            <LullabyLibrary 
+                lullabies={filteredLullabies} 
+                playingId={playingId} 
+                isPlaying={isPlaying} 
+                generating={generating} 
+                onPlay={playLullaby} 
+                onTogglePause={togglePause} 
+            />
 
-                                {/* Info */}
-                                <div className="flex-1 min-w-0">
-                                    <h3 className="text-sm font-bold text-[#1a1b2e] truncate">
-                                        {lullaby.title}
-                                    </h3>
-                                    <p className="text-xs text-slate-500 mt-0.5">
-                                        {lullaby.origin} · ~{lullaby.duration_estimate}s
-                                    </p>
-                                </div>
-
-                                {/* Mood badge */}
-                                <span className={`text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full shrink-0 ${
-                                    lullaby.mood === "sleepy" ? "bg-[#EAE2FB] text-[#6B48C8]"
-                                    : lullaby.mood === "calm" ? "bg-[#D6F4FF] text-[#3AADDB]"
-                                    : lullaby.mood === "comfort" ? "bg-[#FFE5E0] text-[#F0897A]"
-                                    : "bg-[#D5F5E3] text-[#4CAF50]"
-                                }`}>
-                                    {lullaby.mood}
-                                </span>
-                            </div>
-
-                            {/* Lyrics preview (when active) */}
-                            {isActive && (
-                                <div className="mt-4 pt-4 border-t border-slate-100 animate-fade-in">
-                                    <p className="text-xs text-[#4a4b5e] leading-relaxed whitespace-pre-line">
-                                        {lullaby.lyrics}
-                                    </p>
-                                </div>
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
         </div>
     );
 }

@@ -3,14 +3,14 @@
 import Link from "next/link";
 import { useChildren } from "@/lib/hooks";
 import {
-    Heart,
-    Music,
     BookOpen,
+    Heart,
     Moon,
-    Sprout,
-    ChevronRight,
+    Music,
     Sparkles,
+    Sprout,
 } from "lucide-react";
+import { FeatureGrid } from "@/components/soothe/FeatureGrid";
 
 const FEATURES = [
     {
@@ -72,7 +72,7 @@ const FEATURES = [
 
 export default function SoothePage() {
     const { data: children } = useChildren();
-    const hasChildren = children && children.length > 0;
+    const hasChildren = !!children && children.length > 0;
 
     return (
         <div className="animate-fade-in relative z-10 w-full mx-auto max-w-5xl">
@@ -92,70 +92,7 @@ export default function SoothePage() {
             </div>
 
             {/* Feature Grid */}
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {FEATURES.map((feature) => {
-                    const Icon = feature.icon;
-                    const isDisabled = !feature.available || !hasChildren;
-
-                    const card = (
-                        <div
-                            className={`group relative bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-6 transition-all duration-300 ${
-                                isDisabled
-                                    ? "opacity-60 cursor-default"
-                                    : "hover:shadow-[0_8px_32px_-4px_rgba(0,0,0,0.1)] hover:-translate-y-0.5 cursor-pointer"
-                            }`}
-                        >
-                            {/* Coming Soon Badge */}
-                            {!feature.available && (
-                                <div className="absolute top-4 right-4">
-                                    <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full bg-slate-100 text-slate-400">
-                                        Coming soon
-                                    </span>
-                                </div>
-                            )}
-
-                            {/* Icon */}
-                            <div
-                                className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4 shadow-sm transition-transform duration-300 group-hover:scale-105"
-                                style={{
-                                    background: `linear-gradient(135deg, ${feature.bgFrom}, ${feature.bgTo})`,
-                                }}
-                            >
-                                <Icon
-                                    className="w-7 h-7"
-                                    style={{ color: feature.color }}
-                                />
-                            </div>
-
-                            {/* Content */}
-                            <h3 className="text-lg font-bold font-[family-name:var(--font-sans)] text-[#1a1b2e] mb-1.5">
-                                {feature.title}
-                            </h3>
-                            <p className="text-sm text-[#4a4b5e] leading-relaxed mb-4">
-                                {feature.description}
-                            </p>
-
-                            {/* Arrow */}
-                            {feature.available && (
-                                <div className="flex items-center gap-1 text-sm font-semibold text-[#F0897A] group-hover:gap-2 transition-all duration-200">
-                                    <span>Open</span>
-                                    <ChevronRight className="w-4 h-4" />
-                                </div>
-                            )}
-                        </div>
-                    );
-
-                    if (isDisabled) {
-                        return <div key={feature.id}>{card}</div>;
-                    }
-
-                    return (
-                        <Link key={feature.id} href={feature.href}>
-                            {card}
-                        </Link>
-                    );
-                })}
-            </div>
+            <FeatureGrid features={FEATURES} hasChildren={hasChildren} />
         </div>
     );
 }

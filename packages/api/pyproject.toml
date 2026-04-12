@@ -31,6 +31,7 @@ dependencies = [
     # AI reports
     "langchain-core>=0.1.0",
     "langchain-anthropic>=0.1.0",
+    "apscheduler>=3.11.2",
 ]
 
 [project.optional-dependencies]

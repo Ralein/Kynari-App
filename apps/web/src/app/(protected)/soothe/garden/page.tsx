@@ -14,17 +14,16 @@ import {
     Sprout,
     ChevronRight,
     Plus,
-    Loader2,
-    Trash2,
-    Smile,
-    Laugh,
-    MessageSquare,
     Footprints,
+    Laugh,
+    Loader2,
+    MessageSquare,
+    Smile,
     Star,
-    Calendar,
-    BookOpen,
-    Sparkles,
 } from "lucide-react";
+import { MilestoneForm } from "@/components/garden/MilestoneForm";
+import { MilestoneGrid } from "@/components/garden/MilestoneGrid";
+import { WeeklyNarrative } from "@/components/garden/WeeklyNarrative";
 
 const MILESTONE_TYPES = [
     { id: "first_smile", label: "First Smile", icon: Smile, color: "#F0897A" },
@@ -163,66 +162,18 @@ export default function MemoryGardenPage() {
             </div>
 
             {/* Add Milestone Form */}
-            {showAdd && (
-                <div className="bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-6 space-y-4 animate-fade-in">
-                    <div className="flex items-center gap-2">
-                        <Sparkles className="w-4 h-4 text-[#7BC89D]" />
-                        <h2 className="text-base font-bold font-[family-name:var(--font-sans)] text-[#1a1b2e]">
-                            Record a Milestone
-                        </h2>
-                    </div>
-
-                    {/* Type selector */}
-                    <div className="flex flex-wrap gap-2">
-                        {MILESTONE_TYPES.map((type) => {
-                            const Icon = type.icon;
-                            return (
-                                <button
-                                    key={type.id}
-                                    onClick={() => {
-                                        setMilestoneType(type.id);
-                                        if (type.id !== "custom") setTitle(type.label);
-                                    }}
-                                    className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold transition-all ${
-                                        milestoneType === type.id
-                                            ? "text-white shadow-sm"
-                                            : "bg-white/50 border border-white/80 text-slate-500 hover:bg-white/80"
-                                    }`}
-                                    style={milestoneType === type.id ? { backgroundColor: type.color } : undefined}
-                                >
-                                    <Icon className="w-3.5 h-3.5" />
-                                    {type.label}
-                                </button>
-                            );
-                        })}
-                    </div>
-
-                    <input
-                        type="text"
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                        placeholder="Milestone title"
-                        className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-white text-sm font-medium text-[#1a1b2e] focus:outline-none focus:ring-2 focus:ring-[#7BC89D]/30 focus:border-[#7BC89D]"
-                    />
-
-                    <textarea
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        placeholder="Tell us more about this moment... (optional)"
-                        rows={3}
-                        className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-white text-sm text-[#4a4b5e] resize-none focus:outline-none focus:ring-2 focus:ring-[#7BC89D]/30 focus:border-[#7BC89D]"
-                    />
-
-                    <button
-                        onClick={handleCreate}
-                        disabled={creating || !title.trim()}
-                        className="w-full px-6 py-3 rounded-full bg-gradient-to-r from-[#7BC89D] to-[#B5EAC5] text-white font-semibold hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 shadow-[0_8px_20px_-6px_rgba(123,200,157,0.5)] disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                        {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sprout className="w-4 h-4" />}
-                        Save Milestone
-                    </button>
-                </div>
-            )}
+            <MilestoneForm 
+                show={showAdd} 
+                creating={creating} 
+                milestoneType={milestoneType} 
+                title={title} 
+                description={description} 
+                types={MILESTONE_TYPES} 
+                onTypeChange={setMilestoneType} 
+                onTitleChange={setTitle} 
+                onDescriptionChange={setDescription} 
+                onCreate={handleCreate} 
+            />
 
             {/* Content */}
             {loading ? (
@@ -231,108 +182,14 @@ export default function MemoryGardenPage() {
                 </div>
             ) : (
                 <>
-                    {/* Weekly Narratives */}
-                    {garden?.narratives && garden.narratives.length > 0 && (
-                        <div className="space-y-3">
-                            <h2 className="text-base font-bold font-[family-name:var(--font-sans)] text-[#1a1b2e] flex items-center gap-2">
-                                <BookOpen className="w-4 h-4 text-[#6B48C8]" />
-                                Weekly Stories
-                            </h2>
-                            {garden.narratives.map((narrative) => (
-                                <div
-                                    key={narrative.id}
-                                    className="bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-5"
-                                >
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <Calendar className="w-3.5 h-3.5 text-[#6B48C8]" />
-                                        <span className="text-xs font-semibold text-[#6B48C8]">
-                                            {narrative.week_start} — {narrative.week_end}
-                                        </span>
-                                    </div>
-                                    <p className="text-sm text-[#4a4b5e] leading-relaxed">
-                                        {narrative.narrative}
-                                    </p>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                    <WeeklyNarrative narratives={garden?.narratives || []} />
 
-                    {/* Milestone Grid */}
-                    <div className="space-y-3">
-                        <h2 className="text-base font-bold font-[family-name:var(--font-sans)] text-[#1a1b2e] flex items-center gap-2">
-                            <Sprout className="w-4 h-4 text-[#7BC89D]" />
-                            Milestones
-                            {garden && (
-                                <span className="text-xs font-normal text-slate-400">
-                                    ({garden.total_milestones})
-                                </span>
-                            )}
-                        </h2>
-
-                        {!garden?.milestones?.length ? (
-                            <div className="bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-8 text-center">
-                                <Sprout className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                                <p className="text-[#4a4b5e] font-medium mb-1">No milestones yet</p>
-                                <p className="text-sm text-slate-400">
-                                    Your garden is ready to grow. Add your baby&apos;s first milestone!
-                                </p>
-                            </div>
-                        ) : (
-                            <div className="grid sm:grid-cols-2 gap-3">
-                                {garden.milestones.map((milestone) => {
-                                    const typeInfo = getMilestoneIcon(milestone.type);
-                                    const Icon = typeInfo.icon;
-                                    return (
-                                        <div
-                                            key={milestone.id}
-                                            className="bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-5 group hover:shadow-[0_8px_32px_-4px_rgba(0,0,0,0.1)] transition-all duration-300"
-                                        >
-                                            <div className="flex items-start gap-3">
-                                                <div
-                                                    className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0"
-                                                    style={{ backgroundColor: `${typeInfo.color}20` }}
-                                                >
-                                                    <Icon className="w-5 h-5" style={{ color: typeInfo.color }} />
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <h3 className="text-sm font-bold text-[#1a1b2e] truncate">
-                                                        {milestone.title}
-                                                    </h3>
-                                                    {milestone.description && (
-                                                        <p className="text-xs text-[#4a4b5e] mt-1 line-clamp-2">
-                                                            {milestone.description}
-                                                        </p>
-                                                    )}
-                                                    <p className="text-[10px] text-slate-400 mt-1.5">
-                                                        {milestone.detected_at
-                                                            ? new Date(milestone.detected_at).toLocaleDateString("en-US", {
-                                                                month: "short",
-                                                                day: "numeric",
-                                                                year: "numeric",
-                                                            })
-                                                            : "Just now"}
-                                                    </p>
-                                                </div>
-                                                <button
-                                                    onClick={() => handleDelete(milestone.id)}
-                                                    className="w-7 h-7 rounded-full flex items-center justify-center text-slate-200 hover:text-red-400 hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100 shrink-0"
-                                                >
-                                                    <Trash2 className="w-3.5 h-3.5" />
-                                                </button>
-                                            </div>
-                                            {milestone.caption && (
-                                                <div className="mt-3 pt-3 border-t border-slate-100">
-                                                    <p className="text-xs text-[#6B48C8] italic">
-                                                        &ldquo;{milestone.caption}&rdquo;
-                                                    </p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
+                    <MilestoneGrid 
+                        milestones={garden?.milestones || []} 
+                        totalMilestones={garden?.total_milestones || 0} 
+                        types={MILESTONE_TYPES} 
+                        onDelete={handleDelete} 
+                    />
                 </>
             )}
         </div>

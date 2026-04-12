@@ -15,17 +15,21 @@ import {
     Moon,
     Play,
     Pause,
-    Volume2,
     Waves,
     TreePine,
     CloudRain,
-    Music,
     Wind,
-    Zap,
     Settings2,
     Clock,
     Loader2,
+    Music,
+    Volume2,
+    Zap,
 } from "lucide-react";
+import { ProfileSelector } from "@/components/soundscape/ProfileSelector";
+import { LayerMixer } from "@/components/soundscape/LayerMixer";
+import { NatureSoundSelector } from "@/components/soundscape/NatureSoundSelector";
+import { AutoAdaptBadge } from "@/components/soundscape/AutoAdaptBadge";
 
 // ─── Profile presets ────────────────────────────────────────
 
@@ -175,12 +179,9 @@ export default function SoundscapePage() {
         return `${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
     };
 
-    const LAYER_CONFIG = [
-        { key: "pinkNoise" as const, label: "Pink Noise", icon: Volume2, color: "#F0897A" },
-        { key: "nature" as const, label: natureSound === "none" ? "Nature (off)" : `Nature (${natureSound})`, icon: NATURE_SOUNDS.find(n => n.id === natureSound)?.icon || Waves, color: "#93E2FA" },
-        { key: "piano" as const, label: "Soft Piano", icon: Music, color: "#6B48C8" },
-        { key: "shush" as const, label: "Shush Rhythm", icon: Wind, color: "#B5EAC5" },
-    ];
+    const handleLayerChange = (key: keyof LayerState, value: number) => {
+        setLayers((prev) => ({ ...prev, [key]: value }));
+    };
 
     return (
         <div className="animate-fade-in relative z-10 w-full mx-auto max-w-3xl space-y-5">
@@ -207,12 +208,7 @@ export default function SoundscapePage() {
                             Layered sounds that adapt to your baby&apos;s needs.
                         </p>
                     </div>
-                    {autoAdapt && (
-                        <div className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full bg-[#D5F5E3] text-[#4CAF50]">
-                            <Zap className="w-3 h-3" />
-                            Auto-Adapt
-                        </div>
-                    )}
+                    <AutoAdaptBadge active={autoAdapt} />
                 </div>
 
                 {/* Play/Stop + Timer */}
@@ -243,111 +239,25 @@ export default function SoundscapePage() {
             </div>
 
             {/* Profile Selector */}
-            <div className="bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-6">
-                <h2 className="text-base font-bold font-[family-name:var(--font-sans)] text-[#1a1b2e] mb-4">
-                    Sound Profile
-                </h2>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-                    {PROFILES.map((profile) => (
-                        <button
-                            key={profile.id}
-                            onClick={() => selectProfile(profile.id)}
-                            className={`flex flex-col items-center gap-1.5 p-3 rounded-2xl border transition-all duration-200 ${
-                                activeProfile === profile.id
-                                    ? "bg-[#EAE2FB] border-[#6B48C8]/30 shadow-sm"
-                                    : "bg-white/50 border-white/80 hover:bg-white/80"
-                            }`}
-                        >
-                            <span className="text-2xl">{profile.icon}</span>
-                            <span className={`text-xs font-semibold ${
-                                activeProfile === profile.id ? "text-[#6B48C8]" : "text-[#4a4b5e]"
-                            }`}>
-                                {profile.name}
-                            </span>
-                        </button>
-                    ))}
-                </div>
-            </div>
+            <ProfileSelector 
+                profiles={PROFILES} 
+                activeProfile={activeProfile} 
+                onSelectProfile={selectProfile} 
+            />
 
             {/* Layer Mixer */}
-            <div className="bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-6">
-                <h2 className="text-base font-bold font-[family-name:var(--font-sans)] text-[#1a1b2e] mb-5">
-                    Layer Mixer
-                </h2>
-                <div className="space-y-5">
-                    {LAYER_CONFIG.map((layer) => {
-                        const Icon = layer.icon;
-                        const value = layers[layer.key];
-                        const pct = Math.round(value * 100);
-                        return (
-                            <div key={layer.key} className="flex items-center gap-4">
-                                <div
-                                    className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-                                    style={{ backgroundColor: `${layer.color}20` }}
-                                >
-                                    <Icon className="w-4.5 h-4.5" style={{ color: layer.color }} />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center justify-between mb-1.5">
-                                        <span className="text-sm font-semibold text-[#1a1b2e]">
-                                            {layer.label}
-                                        </span>
-                                        <span className="text-xs font-bold text-slate-500">
-                                            {pct}%
-                                        </span>
-                                    </div>
-                                    <input
-                                        type="range"
-                                        min={0}
-                                        max={100}
-                                        value={pct}
-                                        onChange={(e) => {
-                                            const v = parseInt(e.target.value) / 100;
-                                            setLayers((prev) => ({ ...prev, [layer.key]: v }));
-                                        }}
-                                        className="w-full h-2 rounded-full appearance-none cursor-pointer"
-                                        style={{
-                                            background: `linear-gradient(to right, ${layer.color} 0%, ${layer.color} ${pct}%, #E5E7EB ${pct}%, #E5E7EB 100%)`,
-                                        }}
-                                    />
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
+            <LayerMixer 
+                layers={layers} 
+                natureSound={natureSound} 
+                onLayerChange={handleLayerChange} 
+            />
 
             {/* Nature Sound Selector */}
-            <div className="bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-6">
-                <h2 className="text-base font-bold font-[family-name:var(--font-sans)] text-[#1a1b2e] mb-4">
-                    Nature Sound
-                </h2>
-                <div className="grid grid-cols-4 gap-2.5">
-                    {NATURE_SOUNDS.map((sound) => {
-                        const Icon = sound.icon;
-                        return (
-                            <button
-                                key={sound.id}
-                                onClick={() => setNatureSound(sound.id)}
-                                className={`flex flex-col items-center gap-2 p-3.5 rounded-2xl border transition-all duration-200 ${
-                                    natureSound === sound.id
-                                        ? "bg-[#D6F4FF] border-[#93E2FA]/50 shadow-sm"
-                                        : "bg-white/50 border-white/80 hover:bg-white/80"
-                                }`}
-                            >
-                                <Icon className={`w-5 h-5 ${
-                                    natureSound === sound.id ? "text-[#3AADDB]" : "text-slate-400"
-                                }`} />
-                                <span className={`text-xs font-semibold ${
-                                    natureSound === sound.id ? "text-[#3AADDB]" : "text-slate-500"
-                                }`}>
-                                    {sound.name}
-                                </span>
-                            </button>
-                        );
-                    })}
-                </div>
-            </div>
+            <NatureSoundSelector 
+                sounds={NATURE_SOUNDS} 
+                selectedId={natureSound} 
+                onSelect={setNatureSound} 
+            />
 
             {/* Settings Row */}
             <div className="bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-6">
