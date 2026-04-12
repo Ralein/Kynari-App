@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useChildren } from "@/lib/hooks";
 import {
     BookOpen,
+    ChevronRight,
     Heart,
     Moon,
     Music,
@@ -75,18 +76,25 @@ export default function SoothePage() {
     const hasChildren = !!children && children.length > 0;
 
     return (
-        <div className="animate-fade-in relative z-10 w-full mx-auto max-w-5xl">
+        <div className="animate-fade-in space-y-6 relative z-10 w-full mx-auto">
+            {/* Breadcrumb */}
+            <div className="flex items-center gap-1.5 text-sm text-slate-500">
+                <Link href="/dashboard" className="hover:text-[#6B48C8] transition-colors">Dashboard</Link>
+                <ChevronRight className="w-3.5 h-3.5" />
+                <span className="text-[#1a1b2e] font-semibold">Soothe</span>
+            </div>
+
             {/* Header */}
             <div className="mb-10 text-center sm:text-left">
                 <div className="flex items-center justify-center sm:justify-start gap-2.5 mb-2">
                     <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#FFE5E0] to-[#FCECD8] flex items-center justify-center shadow-sm">
                         <Sparkles className="w-5 h-5 text-[#F0897A]" />
                     </div>
-                    <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight font-[family-name:var(--font-sans)] text-[#1a1b2e]">
+                    <h1 className="text-2xl font-extrabold font-[family-name:var(--font-sans)] text-[#1a1b2e]">
                         Soothe & Comfort
                     </h1>
                 </div>
-                <p className="text-[#4a4b5e] text-lg mt-1">
+                <p className="text-[#4a4b5e] text-sm mt-1">
                     Tools that help you respond when your baby needs you most.
                 </p>
             </div>

@@ -81,6 +81,21 @@ def list_narratives(child_id: str, limit: int = 10) -> list[dict]:
     )
 
 
+# ─── Garden Composite ────────────────────────────────────────
+
+def get_garden(child_id: str) -> dict:
+    """Get the full Memory Garden data — milestones + weekly narratives."""
+    milestones = list_milestones(child_id)
+    narratives = list_narratives(child_id)
+    return {
+        "child_id": child_id,
+        "milestones": milestones,
+        "narratives": narratives,
+        "total_milestones": len(milestones),
+        "total_narratives": len(narratives),
+    }
+
+
 # ─── Background Jobs ─────────────────────────────────────────
 
 async def detect_milestones_job():

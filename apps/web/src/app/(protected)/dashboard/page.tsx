@@ -23,11 +23,11 @@ export default function DashboardPage() {
                 <div>
                     <div className="flex items-center justify-center sm:justify-start gap-2 mb-2">
                         <GreetingIcon className="w-6 h-6 text-[#F0897A]" />
-                        <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight font-[family-name:var(--font-sans)] text-[#1a1b2e]">
+                        <h1 className="text-2xl font-extrabold font-[family-name:var(--font-sans)] text-[#1a1b2e]">
                             {greeting}
                         </h1>
                     </div>
-                    <p className="text-[#4a4b5e] text-lg">
+                    <p className="text-[#4a4b5e] text-sm mt-1">
                         Here&apos;s how your little ones are doing today.
                     </p>
                 </div>

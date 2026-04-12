@@ -112,53 +112,49 @@ export default function MemoryGardenPage() {
     };
 
     return (
-        <div className="animate-fade-in relative z-10 w-full mx-auto max-w-3xl space-y-5">
+        <div className="animate-fade-in space-y-6 relative z-10 w-full mx-auto">
             {/* Breadcrumb */}
-            <div className="flex items-center gap-1.5 text-sm text-slate-500 font-medium">
-                <Link href="/soothe" className="hover:text-[#1a1b2e] transition-colors">
-                    Soothe
-                </Link>
+            <div className="flex items-center gap-1.5 text-sm text-slate-500">
+                <Link href="/dashboard" className="hover:text-[#6B48C8] transition-colors">Dashboard</Link>
+                <ChevronRight className="w-3.5 h-3.5" />
+                <Link href="/soothe" className="hover:text-[#6B48C8] transition-colors">Soothe</Link>
                 <ChevronRight className="w-3.5 h-3.5" />
                 <span className="text-[#1a1b2e] font-semibold">Memory Garden</span>
             </div>
 
             {/* Header */}
-            <div className="bg-gradient-to-br from-[#D5F5E3]/60 to-[#B5EAC5]/30 border border-white/80 backdrop-blur-sm shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-6 sm:p-8">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <div className="flex items-center gap-2.5 mb-2">
-                            <Sprout className="w-6 h-6 text-[#7BC89D]" />
-                            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight font-[family-name:var(--font-sans)] text-[#1a1b2e]">
-                                Memory Garden
-                            </h1>
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
+                <div className="flex-1">
+                    <h1 className="text-2xl font-extrabold font-[family-name:var(--font-sans)] text-[#1a1b2e]">
+                        Memory Garden
+                    </h1>
+                    <p className="text-sm text-[#4a4b5e] mt-1">
+                        A living journal of your baby&apos;s beautiful firsts.
+                    </p>
+                    
+                    {/* Child selector simplified */}
+                    {children && children.length > 1 && (
+                        <div className="mt-3">
+                            <select
+                                value={selectedChild}
+                                onChange={(e) => setSelectedChild(e.target.value)}
+                                className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-medium text-[#1a1b2e] focus:outline-none focus:ring-2 focus:ring-[#7BC89D]/20 shadow-sm"
+                            >
+                                {children.map((child) => (
+                                    <option key={child.id} value={child.id}>{child.name}</option>
+                                ))}
+                            </select>
                         </div>
-                        <p className="text-sm text-[#4a4b5e]">
-                            A living journal of your baby&apos;s beautiful firsts.
-                        </p>
-                    </div>
-                    <button
-                        onClick={() => setShowAdd(!showAdd)}
-                        className="px-5 py-2.5 rounded-full bg-gradient-to-r from-[#7BC89D] to-[#B5EAC5] text-white text-sm font-semibold hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 shadow-[0_8px_20px_-6px_rgba(123,200,157,0.5)] flex items-center gap-2"
-                    >
-                        <Plus className="w-4 h-4" />
-                        Add Milestone
-                    </button>
+                    )}
                 </div>
-
-                {/* Child selector */}
-                {children && children.length > 1 && (
-                    <div className="mt-4 pt-4 border-t border-white/40">
-                        <select
-                            value={selectedChild}
-                            onChange={(e) => setSelectedChild(e.target.value)}
-                            className="px-3 py-2 rounded-xl border border-white/50 bg-white/50 text-sm font-medium text-[#1a1b2e]"
-                        >
-                            {children.map((child) => (
-                                <option key={child.id} value={child.id}>{child.name}</option>
-                            ))}
-                        </select>
-                    </div>
-                )}
+                
+                <button
+                    onClick={() => setShowAdd(!showAdd)}
+                    className="inline-flex items-center justify-center px-6 py-2.5 rounded-full bg-gradient-to-r from-[#7BC89D] to-[#B5EAC5] text-white text-sm font-semibold hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 shadow-[0_8px_20px_-6px_rgba(123,200,157,0.5)] gap-2 self-start sm:self-auto"
+                >
+                    {showAdd ? <Star className="w-4 h-4 fill-white animate-pulse" /> : <Plus className="w-4 h-4" />}
+                    {showAdd ? "Recording Firsts..." : "Add Milestone"}
+                </button>
             </div>
 
             {/* Add Milestone Form */}

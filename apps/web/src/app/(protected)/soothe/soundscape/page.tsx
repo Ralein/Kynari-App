@@ -184,29 +184,37 @@ export default function SoundscapePage() {
     };
 
     return (
-        <div className="animate-fade-in relative z-10 w-full mx-auto max-w-3xl space-y-5">
+        <div className="animate-fade-in space-y-6 relative z-10 w-full mx-auto">
             {/* Breadcrumb */}
-            <div className="flex items-center gap-1.5 text-sm text-slate-500 font-medium">
-                <Link href="/soothe" className="hover:text-[#1a1b2e] transition-colors">
-                    Soothe
-                </Link>
+            <div className="flex items-center gap-1.5 text-sm text-slate-500">
+                <Link href="/dashboard" className="hover:text-[#6B48C8] transition-colors">Dashboard</Link>
+                <ChevronRight className="w-3.5 h-3.5" />
+                <Link href="/soothe" className="hover:text-[#6B48C8] transition-colors">Soothe</Link>
                 <ChevronRight className="w-3.5 h-3.5" />
                 <span className="text-[#1a1b2e] font-semibold">Sleep Soundscape</span>
             </div>
 
-            {/* Header + Play Button */}
+            {/* Header */}
+            <div>
+                <h1 className="text-2xl font-extrabold font-[family-name:var(--font-sans)] text-[#1a1b2e]">
+                    Sleep Soundscape
+                </h1>
+                <p className="text-sm text-[#4a4b5e] mt-1">
+                    Layered sounds that adapt to your baby&apos;s needs.
+                </p>
+            </div>
+
+            {/* Active Session Card */}
             <div className="bg-gradient-to-br from-[#EAE2FB]/60 to-[#1a1b2e]/5 border border-white/80 backdrop-blur-sm shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-6 sm:p-8">
-                <div className="flex items-center justify-between mb-6">
-                    <div>
-                        <div className="flex items-center gap-2.5 mb-1">
+                <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-2xl bg-white/80 flex items-center justify-center shadow-sm">
                             <Moon className="w-6 h-6 text-[#6B48C8]" />
-                            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight font-[family-name:var(--font-sans)] text-[#1a1b2e]">
-                                Sleep Soundscape
-                            </h1>
                         </div>
-                        <p className="text-sm text-[#4a4b5e]">
-                            Layered sounds that adapt to your baby&apos;s needs.
-                        </p>
+                        <div>
+                            <p className="text-sm font-bold text-[#1a1b2e]">Session Activity</p>
+                            <p className="text-xs text-[#4a4b5e]">{isPlaying ? "Mixing sounds live..." : "Paused"}</p>
+                        </div>
                     </div>
                     <AutoAdaptBadge active={autoAdapt} />
                 </div>

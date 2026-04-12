@@ -167,25 +167,22 @@ export default function VoiceLullabyPage() {
         : lullabies.filter((l) => l.mood === activeMood);
 
     return (
-        <div className="animate-fade-in relative z-10 w-full mx-auto max-w-3xl space-y-5">
+        <div className="animate-fade-in space-y-6 relative z-10 w-full mx-auto">
             {/* Breadcrumb */}
-            <div className="flex items-center gap-1.5 text-sm text-slate-500 font-medium">
-                <Link href="/soothe" className="hover:text-[#1a1b2e] transition-colors">
-                    Soothe
-                </Link>
+            <div className="flex items-center gap-1.5 text-sm text-slate-500">
+                <Link href="/dashboard" className="hover:text-[#6B48C8] transition-colors">Dashboard</Link>
+                <ChevronRight className="w-3.5 h-3.5" />
+                <Link href="/soothe" className="hover:text-[#6B48C8] transition-colors">Soothe</Link>
                 <ChevronRight className="w-3.5 h-3.5" />
                 <span className="text-[#1a1b2e] font-semibold">Voice Lullaby</span>
             </div>
 
             {/* Header */}
-            <div className="bg-gradient-to-br from-[#D6F4FF]/60 to-[#C2ECFB]/30 border border-white/80 backdrop-blur-sm shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-6 sm:p-8">
-                <div className="flex items-center gap-2.5 mb-2">
-                    <Music className="w-6 h-6 text-[#3AADDB]" />
-                    <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight font-[family-name:var(--font-sans)] text-[#1a1b2e]">
-                        Voice Lullaby Studio
-                    </h1>
-                </div>
-                <p className="text-sm text-[#4a4b5e]">
+            <div>
+                <h1 className="text-2xl font-extrabold font-[family-name:var(--font-sans)] text-[#1a1b2e]">
+                    Voice Lullaby Studio
+                </h1>
+                <p className="text-sm text-[#4a4b5e] mt-1">
                     Choose a voice and play classic lullabies rendered with Kokoro AI.
                 </p>
             </div>

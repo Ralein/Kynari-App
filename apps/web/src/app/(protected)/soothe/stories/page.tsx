@@ -104,38 +104,33 @@ export default function StoriesPage() {
     };
 
     return (
-        <div className="animate-fade-in relative z-10 w-full mx-auto max-w-3xl space-y-5">
+        <div className="animate-fade-in space-y-6 relative z-10 w-full mx-auto">
             {/* Breadcrumb */}
-            <div className="flex items-center gap-1.5 text-sm text-slate-500 font-medium">
-                <Link href="/soothe" className="hover:text-[#1a1b2e] transition-colors">
-                    Soothe
-                </Link>
+            <div className="flex items-center gap-1.5 text-sm text-slate-500">
+                <Link href="/dashboard" className="hover:text-[#6B48C8] transition-colors">Dashboard</Link>
+                <ChevronRight className="w-3.5 h-3.5" />
+                <Link href="/soothe" className="hover:text-[#6B48C8] transition-colors">Soothe</Link>
                 <ChevronRight className="w-3.5 h-3.5" />
                 <span className="text-[#1a1b2e] font-semibold">Picture Book</span>
             </div>
 
             {/* Header */}
-            <div className="bg-gradient-to-br from-[#FCECD8]/60 to-[#FFE5E0]/30 border border-white/80 backdrop-blur-sm shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-6 sm:p-8">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <div className="flex items-center gap-2.5 mb-2">
-                            <BookOpen className="w-6 h-6 text-[#F3A595]" />
-                            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight font-[family-name:var(--font-sans)] text-[#1a1b2e]">
-                                Picture Book
-                            </h1>
-                        </div>
-                        <p className="text-sm text-[#4a4b5e]">
-                            AI-generated stories starring your little one.
-                        </p>
-                    </div>
-                    <button
-                        onClick={() => setShowGenerator(!showGenerator)}
-                        className="px-5 py-2.5 rounded-full bg-gradient-to-r from-[#F0897A] to-[#EFA192] text-white text-sm font-semibold hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 shadow-[0_8px_20px_-6px_rgba(240,137,122,0.5)] flex items-center gap-2"
-                    >
-                        <Plus className="w-4 h-4" />
-                        New Book
-                    </button>
+            <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
+                <div>
+                    <h1 className="text-2xl font-extrabold font-[family-name:var(--font-sans)] text-[#1a1b2e]">
+                        AI Picture Book
+                    </h1>
+                    <p className="text-sm text-[#4a4b5e] mt-1">
+                        Personalized illustrated stories starring your little one.
+                    </p>
                 </div>
+                <button
+                    onClick={() => setShowGenerator(!showGenerator)}
+                    className="inline-flex items-center justify-center px-6 py-2.5 rounded-full bg-gradient-to-r from-[#F0897A] to-[#EFA192] text-white text-sm font-semibold hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 shadow-[0_8px_20px_-6px_rgba(240,137,122,0.5)] gap-2 self-start sm:self-auto"
+                >
+                    {showGenerator ? <Heart className="w-4 h-4 fill-white animate-pulse" /> : <Plus className="w-4 h-4" />}
+                    {showGenerator ? "Creating magic..." : "New Book"}
+                </button>
             </div>
 
             {/* Generator Panel */}
