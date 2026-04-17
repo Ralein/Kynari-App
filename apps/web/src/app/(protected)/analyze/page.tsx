@@ -23,7 +23,7 @@ import { AnalyzingOverlay } from "@/components/analyze/AnalyzingOverlay";
 type Tab = "camera" | "audio" | "upload";
 
 import { AnalysisResultCard, type AnalysisResult } from "@/components/analyze/AnalysisResultCard";
-import { SoothePanel } from "@/components/soothe/SoothePanel";
+import { PlaybookPanel } from "@/components/playbook/PlaybookPanel";
 
 
 export default function AnalyzePage() {
@@ -38,7 +38,7 @@ export default function AnalyzePage() {
     const [feedbackGiven, setFeedbackGiven] = useState(false);
     const [combinedMode, setCombinedMode] = useState(false);
     const faceResultRef = useRef<AnalyzeImageResult | null>(null);
-    const [soothePlan, setSoothePlan] = useState<{ need: string; confidence: number } | null>(null);
+    const [playbookPlan, setPlaybookPlan] = useState<{ need: string; confidence: number } | null>(null);
 
     useEffect(() => {
         if (children?.length && !selectedChild) {
@@ -557,20 +557,20 @@ export default function AnalyzePage() {
                         setError(null);
                         setSaved(false);
                         setCapturePreview(null);
-                        setSoothePlan(null);
+                        setPlaybookPlan(null);
                     }}
-                    onShowSoothePlan={(need, confidence) => {
-                        setSoothePlan({ need, confidence });
+                    onShowPlaybookPlan={(need, confidence) => {
+                        setPlaybookPlan({ need, confidence });
                     }}
                 />
             )}
 
-            {/* Soothe Plan — Phase 2 */}
-            {soothePlan && selectedChild && (
-                <SoothePanel
+            {/* Care Playbook Plan */}
+            {playbookPlan && selectedChild && (
+                <PlaybookPanel
                     childId={selectedChild}
-                    need={soothePlan.need}
-                    confidence={soothePlan.confidence}
+                    need={playbookPlan.need}
+                    confidence={playbookPlan.confidence}
                 />
             )}
         </div>

@@ -109,9 +109,9 @@ export default function DashboardPage() {
 
             )}
 
-            {/* ─── Soothe & Comfort Suite Banner ──────────────────── */}
+            {/* ─── Care Playbook Suite Banner ────────────────────────── */}
             {!isLoading && hasChildren && (
-                <Link href="/soothe" className="block mt-8 group">
+                <Link href="/playbook" className="block mt-8 group">
                     <div className="relative overflow-hidden bg-gradient-to-r from-[#EAE2FB] via-[#FCECD8] to-[#FFE5E0] rounded-3xl p-6 sm:p-8 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] border border-white/60 hover:shadow-[0_8px_32px_-4px_rgba(107,72,200,0.15)] transition-all duration-300 hover:-translate-y-0.5">
                         {/* Decorative floating icons */}
                         <div className="absolute top-4 right-4 sm:top-6 sm:right-6 flex gap-3 opacity-20 group-hover:opacity-40 transition-opacity">
@@ -126,10 +126,10 @@ export default function DashboardPage() {
                             </div>
                             <div className="flex-1 min-w-0">
                                 <h2 className="text-xl sm:text-2xl font-extrabold text-[#1a1b2e] font-[family-name:var(--font-sans)] tracking-tight">
-                                    Soothe & Comfort Suite
+                                    Care Playbook Suite
                                 </h2>
                                 <p className="text-sm text-[#4a4b5e] mt-1 line-clamp-2">
-                                    Lullabies in AI voices, adaptive sleep soundscapes, personalized picture books, and a living milestone garden.
+                                    Adaptive sleep soundscapes, personalized picture books, lullabies in AI voices, and a living milestone garden.
                                 </p>
                             </div>
                         </div>

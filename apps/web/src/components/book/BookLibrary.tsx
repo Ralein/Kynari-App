@@ -41,7 +41,7 @@ export function BookLibrary({ loading, books, onDelete }: BookLibraryProps) {
                     <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#FCECD8] to-[#FFE5E0] flex items-center justify-center shrink-0">
                         <BookOpen className="w-7 h-7 text-[#F3A595]" />
                     </div>
-                    <Link href={`/soothe/stories/${book.id}`} className="flex-1 min-w-0">
+                    <Link href={`/playbook/stories/${book.id}`} className="flex-1 min-w-0">
                         <h3 className="text-sm font-bold text-[#1a1b2e] truncate group-hover:text-[#F0897A] transition-colors">
                             {book.title}
                         </h3>
@@ -56,7 +56,7 @@ export function BookLibrary({ loading, books, onDelete }: BookLibraryProps) {
                     >
                         <Trash2 className="w-4 h-4" />
                     </button>
-                    <Link href={`/soothe/stories/${book.id}`}>
+                    <Link href={`/playbook/stories/${book.id}`}>
                         <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-[#F0897A] transition-colors" />
                     </Link>
                 </div>

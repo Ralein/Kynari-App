@@ -18,7 +18,7 @@ export function TopNav() {
         { href: "/dashboard", label: "Home" },
         ...(hasChildren
             ? [
-                  { href: "/soothe", label: "Soothe", icon: Heart },
+                  { href: "/playbook", label: "Playbook", icon: Heart },
                   { href: "/analyze", label: "Analyze", icon: Search },
               ]
             : []),

@@ -71,7 +71,7 @@ def list_narratives(child_id: str, limit: int = 10) -> list[dict]:
     return fetch_all(
         """
         SELECT id::text, child_id::text, week_start, week_end,
-               narrative, analysis_count, soothe_count, created_at
+               narrative, analysis_count, soothe_count AS playbook_count, created_at
         FROM weekly_narratives
         WHERE child_id = %s
         ORDER BY week_start DESC
@@ -167,17 +167,17 @@ async def generate_weekly_narrative_job():
             (child_id, last_mon, last_sun)
         )["count"]
         
-        soothe_count = fetch_one(
+        playbook_count = fetch_one(
             "SELECT COUNT(*) as count FROM soothe_feedback WHERE child_id = %s AND recorded_at >= %s AND recorded_at <= %s",
             (child_id, last_mon, last_sun)
         )["count"]
         
         # If no activity, skip or generate "quiet week"
-        if analysis_count == 0 and soothe_count == 0:
+        if analysis_count == 0 and playbook_count == 0:
             continue
             
         # Call Claude for narrative
-        narrative = await _call_claude_for_narrative(child["name"], last_mon, last_sun, analysis_count, soothe_count)
+        narrative = await _call_claude_for_narrative(child["name"], last_mon, last_sun, analysis_count, playbook_count)
         
         # Store
         execute(
@@ -185,15 +185,15 @@ async def generate_weekly_narrative_job():
             INSERT INTO weekly_narratives (child_id, week_start, week_end, narrative, analysis_count, soothe_count)
             VALUES (%s, %s, %s, %s, %s, %s)
             """,
-            (child_id, last_mon, last_sun, narrative, analysis_count, soothe_count)
+            (child_id, last_mon, last_sun, narrative, analysis_count, playbook_count)
         )
         logger.info(f"Generated weekly narrative for child {child_id}")
 
-async def _call_claude_for_narrative(child_name, start, end, analysis_count, soothe_count):
+async def _call_claude_for_narrative(child_name, start, end, analysis_count, playbook_count):
     """Internal helper to call Anthropic for a story-like narrative."""
     settings = get_settings()
     if not settings.anthropic_api_key:
-        return f"It was a busy week for {child_name}! We saw {analysis_count} developmental highlights and used soothing techniques {soothe_count} times. (Fallback: AI narrative unavailable)"
+        return f"It was a busy week for {child_name}! We saw {analysis_count} developmental highlights and used care techniques {playbook_count} times. (Fallback: AI narrative unavailable)"
 
     try:
         from langchain_anthropic import ChatAnthropic
@@ -215,7 +215,7 @@ async def _call_claude_for_narrative(child_name, start, end, analysis_count, soo
         human_msg = HumanMessage(content=(
             f"Here is the weekly data for {child_name} ({start} to {end}):\n"
             f"- Developmental analysis readings: {analysis_count}\n"
-            f"- Soothing and comfort moments shared: {soothe_count}\n\n"
+            f"- Care techniques shared: {playbook_count}\n\n"
             "Write a short, heart-warming story summarizing this week for the parent's scrapbook."
         ))
         
@@ -223,4 +223,4 @@ async def _call_claude_for_narrative(child_name, start, end, analysis_count, soo
         return response.content
     except Exception as e:
         logger.error(f"Error generating narrative: {e}")
-        return f"A week filled with {analysis_count} moments of discovery and {soothe_count} moments of comfort for {child_name}."
+        return f"A week filled with {analysis_count} moments of discovery and {playbook_count} moments of comfort for {child_name}."

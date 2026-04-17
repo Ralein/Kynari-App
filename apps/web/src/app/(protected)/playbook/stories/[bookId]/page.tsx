@@ -120,7 +120,7 @@ export default function BookReaderPage() {
             <div className="animate-fade-in relative z-10 w-full mx-auto text-center py-20">
                 <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                 <p className="text-[#4a4b5e] font-medium">Book not found</p>
-                <Link href="/soothe/stories" className="text-sm text-[#F0897A] font-semibold mt-2 inline-block">
+                <Link href="/playbook/stories" className="text-sm text-[#F0897A] font-semibold mt-2 inline-block">
                     Back to library
                 </Link>
             </div>
@@ -147,9 +147,9 @@ export default function BookReaderPage() {
             <div className="flex items-center gap-1.5 text-sm text-slate-500">
                 <Link href="/dashboard" className="hover:text-[#6B48C8] transition-colors">Dashboard</Link>
                 <ChevronRight className="w-3.5 h-3.5" />
-                <Link href="/soothe" className="hover:text-[#6B48C8] transition-colors">Soothe</Link>
+                <Link href="/playbook" className="hover:text-[#6B48C8] transition-colors">Playbook</Link>
                 <ChevronRight className="w-3.5 h-3.5" />
-                <Link href="/soothe/stories" className="hover:text-[#6B48C8] transition-colors">Stories</Link>
+                <Link href="/playbook/stories" className="hover:text-[#6B48C8] transition-colors">Stories</Link>
                 <ChevronRight className="w-3.5 h-3.5" />
                 <span className="text-[#1a1b2e] font-semibold truncate max-w-[200px]">
                     {book.title}

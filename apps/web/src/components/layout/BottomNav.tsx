@@ -21,11 +21,11 @@ export function BottomNav() {
                 {hasChildren && (
                     <>
                         <Link
-                            href="/soothe"
+                            href="/playbook"
                             className="flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-slate-400 hover:text-[#1a1b2e] transition-colors"
                         >
                             <Heart className="w-5 h-5" />
-                            <span className="text-[10px] font-medium">Soothe</span>
+                            <span className="text-[10px] font-medium">Playbook</span>
                         </Link>
                         <Link
                             href="/analyze"

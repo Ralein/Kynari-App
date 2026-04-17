@@ -3,22 +3,22 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@clerk/nextjs";
 import {
-    getSoothePlan,
-    submitSootheFeedback,
-    type SootheTechnique,
-    type SoothePlanResult,
+    getPlaybookPlan,
+    submitPlaybookFeedback,
+    type PlaybookTechnique,
+    type PlaybookPlanResult,
 } from "@/lib/api";
 import { ChevronDown, ChevronUp, Check, X, Loader2, Timer, Award, Sparkles } from "lucide-react";
 
-interface SoothePanelProps {
+interface PlaybookPanelProps {
     childId: string;
     need: string;
     confidence: number;
 }
 
-export function SoothePanel({ childId, need, confidence }: SoothePanelProps) {
+export function PlaybookPanel({ childId, need, confidence }: PlaybookPanelProps) {
     const { getToken } = useAuth();
-    const [plan, setPlan] = useState<SoothePlanResult | null>(null);
+    const [plan, setPlan] = useState<PlaybookPlanResult | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -30,14 +30,14 @@ export function SoothePanel({ childId, need, confidence }: SoothePanelProps) {
         try {
             const token = await getToken();
             if (!token) return;
-            const result = await getSoothePlan(token, childId, need, confidence);
+            const result = await getPlaybookPlan(token, childId, need, confidence);
             setPlan(result);
             // Auto-expand first technique
             if (result.techniques.length > 0) {
                 setExpandedId(result.techniques[0].technique_id);
             }
         } catch (e) {
-            setError(e instanceof Error ? e.message : "Failed to load soothe plan");
+            setError(e instanceof Error ? e.message : "Failed to load care plan");
         } finally {
             setLoading(false);
         }
@@ -47,12 +47,12 @@ export function SoothePanel({ childId, need, confidence }: SoothePanelProps) {
         fetchPlan();
     }, [fetchPlan]);
 
-    const handleFeedback = async (technique: SootheTechnique, outcome: "success" | "fail") => {
+    const handleFeedback = async (technique: PlaybookTechnique, outcome: "success" | "fail") => {
         setFeedbackStates((prev) => ({ ...prev, [technique.technique_id]: "pending" }));
         try {
             const token = await getToken();
             if (!token) return;
-            await submitSootheFeedback(token, {
+            await submitPlaybookFeedback(token, {
                 child_id: childId,
                 need,
                 technique_id: technique.technique_id,
@@ -80,7 +80,7 @@ export function SoothePanel({ childId, need, confidence }: SoothePanelProps) {
             <div className="bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-8">
                 <div className="flex items-center justify-center gap-3 py-8">
                     <Loader2 className="w-6 h-6 animate-spin text-[#F0897A]" />
-                    <span className="text-[#4a4b5e] font-medium">Loading soothe plan...</span>
+                    <span className="text-[#4a4b5e] font-medium">Loading care plan...</span>
                 </div>
             </div>
         );
@@ -89,7 +89,7 @@ export function SoothePanel({ childId, need, confidence }: SoothePanelProps) {
     if (error || !plan) {
         return (
             <div className="bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-8 text-center">
-                <p className="text-[#4a4b5e]">{error || "No soothe plan available."}</p>
+                <p className="text-[#4a4b5e]">{error || "No care plan available."}</p>
             </div>
         );
     }
@@ -101,7 +101,7 @@ export function SoothePanel({ childId, need, confidence }: SoothePanelProps) {
                 <div className="flex items-center gap-3 mb-3">
                     <Sparkles className="w-5 h-5" style={{ color: nc.text }} />
                     <h2 className="text-xl font-bold font-[family-name:var(--font-sans)] text-[#1a1b2e]">
-                        Soothe Plan
+                        Playbook Plan
                     </h2>
                     <span
                         className="text-xs font-semibold px-3 py-1 rounded-full capitalize"

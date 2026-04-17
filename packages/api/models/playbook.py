@@ -1,4 +1,4 @@
-"""Pydantic models for the Smart Soothe Engine."""
+"""Pydantic models for the Care Playbook."""
 
 from datetime import datetime
 from typing import Literal, Optional
@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 # ─── Request Models ──────────────────────────────────────────
 
-class SootheFeedbackRequest(BaseModel):
+class PlaybookFeedbackRequest(BaseModel):
     child_id: str
     need: str
     technique_id: str
@@ -18,7 +18,7 @@ class SootheFeedbackRequest(BaseModel):
 
 # ─── Response Models ─────────────────────────────────────────
 
-class SootheTechnique(BaseModel):
+class PlaybookTechnique(BaseModel):
     technique_id: str
     name: str
     description: str
@@ -29,14 +29,14 @@ class SootheTechnique(BaseModel):
     total_feedback: int = 0
 
 
-class SoothePlanResponse(BaseModel):
+class PlaybookPlanResponse(BaseModel):
     need: str
     confidence: float
-    techniques: list[SootheTechnique]        # ranked, max 4
+    techniques: list[PlaybookTechnique]        # ranked, max 4
     personalised: bool                        # False until ≥5 feedback events for child
 
 
-class SootheFeedbackResponse(BaseModel):
+class PlaybookFeedbackResponse(BaseModel):
     success: bool
     feedback_id: Optional[str] = None
     message: str = "Feedback recorded"
@@ -54,7 +54,7 @@ class TechniqueStats(BaseModel):
     last_used: Optional[datetime] = None
 
 
-class SootheStatsResponse(BaseModel):
+class PlaybookStatsResponse(BaseModel):
     child_id: str
     total_feedback: int
     techniques: list[TechniqueStats]

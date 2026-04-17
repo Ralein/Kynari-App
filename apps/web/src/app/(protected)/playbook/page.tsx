@@ -11,13 +11,13 @@ import {
     Sparkles,
     Sprout,
 } from "lucide-react";
-import { FeatureGrid } from "@/components/soothe/FeatureGrid";
+import { FeatureGrid } from "@/components/playbook/FeatureGrid";
 
 const FEATURES = [
     {
-        id: "soothe-plan",
-        title: "Smart Soothe",
-        description: "Get personalised soothing techniques ranked by what works for your baby.",
+        id: "playbook-plan",
+        title: "Soothing Guide",
+        description: "Get personalised care techniques ranked by what works for your baby.",
         icon: Heart,
         href: "/analyze",
         color: "#F0897A",
@@ -30,7 +30,7 @@ const FEATURES = [
         title: "Sleep Soundscape",
         description: "Adaptive sound mixer — pink noise, nature, and melodies that respond to your baby.",
         icon: Moon,
-        href: "/soothe/soundscape",
+        href: "/playbook/soundscape",
         color: "#6B48C8",
         bgFrom: "#EAE2FB",
         bgTo: "#D8D0F0",
@@ -41,7 +41,7 @@ const FEATURES = [
         title: "Voice Lullaby",
         description: "Play classic lullabies with beautiful AI voices. Choose from 20+ voice styles.",
         icon: Music,
-        href: "/soothe/voice",
+        href: "/playbook/voice",
         color: "#93E2FA",
         bgFrom: "#D6F4FF",
         bgTo: "#C2ECFB",
@@ -52,7 +52,7 @@ const FEATURES = [
         title: "Picture Book",
         description: "Generate personalized illustrated storybooks starring your little one.",
         icon: BookOpen,
-        href: "/soothe/stories",
+        href: "/playbook/stories",
         color: "#F3A595",
         bgFrom: "#FCECD8",
         bgTo: "#FFE5E0",
@@ -63,7 +63,7 @@ const FEATURES = [
         title: "Memory Garden",
         description: "A living milestone journal that fills itself with your baby's firsts.",
         icon: Sprout,
-        href: "/soothe/garden",
+        href: "/playbook/garden",
         color: "#7BC89D",
         bgFrom: "#D5F5E3",
         bgTo: "#B5EAC5",
@@ -71,7 +71,7 @@ const FEATURES = [
     },
 ];
 
-export default function SoothePage() {
+export default function PlaybookPage() {
     const { data: children } = useChildren();
     const hasChildren = !!children && children.length > 0;
 
@@ -81,7 +81,7 @@ export default function SoothePage() {
             <div className="flex items-center gap-1.5 text-sm text-slate-500">
                 <Link href="/dashboard" className="hover:text-[#6B48C8] transition-colors">Dashboard</Link>
                 <ChevronRight className="w-3.5 h-3.5" />
-                <span className="text-[#1a1b2e] font-semibold">Soothe</span>
+                <span className="text-[#1a1b2e] font-semibold">Playbook</span>
             </div>
 
             {/* Header */}
@@ -91,11 +91,11 @@ export default function SoothePage() {
                         <Sparkles className="w-5 h-5 text-[#F0897A]" />
                     </div>
                     <h1 className="text-2xl font-extrabold font-[family-name:var(--font-sans)] text-[#1a1b2e]">
-                        Soothe & Comfort
+                        The Playbook
                     </h1>
                 </div>
                 <p className="text-[#4a4b5e] text-sm mt-1">
-                    Tools that help you respond when your baby needs you most.
+                    Your personalised care guide and calming toolkit.
                 </p>
             </div>
 

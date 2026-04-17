@@ -1,7 +1,7 @@
-# Kynari — Phase 2: Soothe & Comfort Suite
+# Kynari — Phase 2: Care Playbook Suite
 
 > **Implementation Plan · v1.0**
-> Builds on the Phase 1 detection pipeline. Phase 2 closes the loop: once a need is identified, Kynari actively helps the parent respond to it.
+> Builds on the Phase 1 detection pipeline. Phase 2 closes the loop: once a need is identified, Kynari actively helps the parent respond to it via the Playbook.
 
 ---
 
@@ -10,7 +10,7 @@
 1. [Overview](#1-overview)
 2. [Feature 1 — Voice Lullaby Studio](#2-feature-1--voice-lullaby-studio)
 3. [Feature 2 — AI Picture Book](#3-feature-2--ai-picture-book)
-4. [Feature 3 — Smart Soothe Engine](#4-feature-3--smart-soothe-engine)
+4. [Feature 3 — Care Playbook](#4-feature-3--care-playbook)
 5. [Feature 4 — Sleep Soundscape](#5-feature-4--sleep-soundscape)
 6. [Feature 5 — Memory Garden](#6-feature-5--memory-garden)
 7. [Database Schema Extensions](#7-database-schema-extensions)
@@ -29,14 +29,14 @@
 Phase 1 answers: **"What does my baby need?"**
 Phase 2 answers: **"Now what do I do?"**
 
-The Soothe & Comfort Suite is a collection of five AI-powered response tools that activate immediately after a need is detected. Each feature is independent and can be shipped incrementally. They share a common foundation: the `child_id`, the detected need, and the parent's feedback history.
+The Care Playbook Suite is a collection of five AI-powered response tools that activate immediately after a need is detected. Each feature is independent and can be shipped incrementally. They share a common foundation: the `child_id`, the detected need, and the parent's feedback history.
 
 ### Design Principles
 
 - **Response, not just reporting.** Every insight surfaces an action.
 - **Personalised from day one.** Each feature reads from and writes to the child's history.
 - **Privacy mirrors Phase 1.** No raw audio leaves the device. Voice embeddings are stored encrypted, never the raw voice recording.
-- **Graceful degradation.** Every feature has a fallback that works offline (generic lullaby, static story, generic soothe plan, preset soundscape).
+- **Graceful degradation.** Every feature has a fallback that works offline (generic lullaby, static story, generic care plan, preset soundscape).
 
 ### How Phase 2 Connects to Phase 1
 
@@ -48,11 +48,11 @@ Phase 1 Output
         ▼
 Phase 2 Trigger (client-side)
 ──────────────────────────────
-confidence >= 0.55  →  open Soothe & Comfort panel
+confidence >= 0.55  →  open Care Playbook panel
         │
         ├──► Feature 1: Voice Lullaby  (if need = Sleepy | Calm)
         ├──► Feature 2: Picture Book   (on-demand, any state)
-        ├──► Feature 3: Soothe Engine  (ranked plan for detected need)
+        ├──► Feature 3: Care Playbook  (ranked plan for detected need)
         ├──► Feature 4: Sleep Soundscape (if need = Sleepy | Calm)
         └──► Feature 5: Memory Garden  (passive, always recording milestones)
 ```
@@ -287,11 +287,11 @@ POST /api/voice/generate
 
 ---
 
-## 4. Feature 3 — Smart Soothe Engine
+## 4. Feature 3 — Care Playbook
 
 ### Concept
 
-When a need is detected (e.g. Hungry, confidence 0.67), the Soothe Engine surfaces a ranked list of soothing techniques personalised to the specific child, ordered by historical success rate. Each technique includes step-by-step guidance, an optional timer, and a feedback button ("This worked / Didn't help"). Over time, the rankings update per child, per time of day.
+When a need is detected (e.g. Hungry, confidence 0.67), the Care Playbook surfaces a ranked list of soothing techniques personalised to the specific child, ordered by historical success rate. Each technique includes step-by-step guidance, an optional timer, and a feedback button ("This worked / Didn't help"). Over time, the rankings update per child, per time of day.
 
 ### Architecture
 
@@ -302,7 +302,7 @@ Detected Need + child_id + current_time
 GET /api/soothe/plan?child_id=&need=hungry
         │
         ▼
-SootheEngine.get_plan(child_id, need, hour_of_day)
+PlaybookEngine.get_plan(child_id, need, hour_of_day)
         │
         ├── Fetch base techniques for need from `soothe_techniques` table
         ├── Fetch child's feedback history from `soothe_feedback` table
@@ -314,7 +314,7 @@ SootheEngine.get_plan(child_id, need, hour_of_day)
         └── Return first technique's step-by-step instructions
 ```
 
-### Soothe Technique Taxonomy (seed data)
+### Care Technique Taxonomy (seed data)
 
 Each need maps to 4–6 techniques. This is the initial seed; feedback personalises the order per child.
 
@@ -360,7 +360,7 @@ POST /api/soothe/feedback
 INSERT into soothe_feedback
         │
         ▼
-SootheEngine re-scores on next plan request
+PlaybookEngine re-scores on next plan request
 (no batch retraining — simple Bayesian update on success_count / total_count)
 ```
 
@@ -369,7 +369,7 @@ SootheEngine re-scores on next plan request
 ```python
 # models/soothe.py
 
-class SootheTechnique(BaseModel):
+class PlaybookTechnique(BaseModel):
     technique_id: str
     name: str
     description: str
@@ -378,13 +378,13 @@ class SootheTechnique(BaseModel):
     timer_seconds: Optional[int]         # None if no timer needed
     success_rate: Optional[float]        # None until ≥3 feedback events
 
-class SoothePlanResponse(BaseModel):
+class PlaybookPlanResponse(BaseModel):
     need: str
     confidence: float
     techniques: List[SootheTechnique]    # ranked, max 4
     personalised: bool                   # False until ≥5 feedback events for child
 
-class SootheFeedbackRequest(BaseModel):
+class PlaybookFeedbackRequest(BaseModel):
     child_id: str
     need: str
     technique_id: str
@@ -736,7 +736,7 @@ kynari/
 ├── apps/
 │   └── web/
 │       ├── app/
-│       │   ├── soothe/                   # NEW — Phase 2 main section
+│       │   ├── playbook/                 # NEW — Phase 2 main section
 │       │   │   ├── page.tsx              #   Soothe & Comfort dashboard
 │       │   │   ├── voice/
 │       │   │   │   └── page.tsx          #   Voice Lullaby Studio
@@ -750,9 +750,9 @@ kynari/
 │       │   │       └── page.tsx          #   Memory Garden
 │       │   └── (existing Phase 1 routes)
 │       └── components/
-│           ├── soothe/                   # NEW
-│           │   ├── SoothePanel.tsx       #   Triggered from Phase 1 result
-│           │   ├── SoothePlan.tsx        #   Ranked technique list
+│           ├── playbook/                 # NEW
+│           │   ├── PlaybookPanel.tsx     #   Triggered from Phase 1 result
+│           │   ├── PlaybookPlan.tsx      #   Ranked technique list
 │           │   ├── TechniqueCard.tsx
 │           │   ├── StepGuide.tsx
 │           │   └── FeedbackButtons.tsx
@@ -780,25 +780,25 @@ kynari/
         ├── routers/
         │   ├── voice.py                  # NEW
         │   ├── books.py                  # NEW
-        │   ├── soothe.py                 # NEW
+        │   ├── playbook.py               # NEW
         │   ├── soundscape.py             # NEW
         │   └── memory.py                 # NEW
         ├── services/
         │   ├── voice_studio.py           # NEW
         │   ├── picture_book.py           # NEW
-        │   ├── soothe_engine.py          # NEW
+        │   ├── playbook_engine.py        # NEW
         │   ├── soundscape_service.py     # NEW
         │   └── memory_garden.py          # NEW
         ├── models/
         │   ├── voice.py                  # NEW
         │   ├── book.py                   # NEW
-        │   ├── soothe.py                 # NEW
+        │   ├── playbook.py               # NEW
         │   ├── soundscape.py             # NEW
         │   └── memory.py                 # NEW
         └── migrations/
             ├── 005_phase2_voice.sql      # NEW
             ├── 006_phase2_books.sql      # NEW
-            ├── 007_phase2_soothe.sql     # NEW
+            ├── 007_phase2_playbook.sql   # NEW
             ├── 008_phase2_soundscape.sql # NEW
             └── 009_phase2_memory.sql     # NEW
 ```

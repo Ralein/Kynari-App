@@ -109,7 +109,7 @@ export default function StoriesPage() {
             <div className="flex items-center gap-1.5 text-sm text-slate-500">
                 <Link href="/dashboard" className="hover:text-[#6B48C8] transition-colors">Dashboard</Link>
                 <ChevronRight className="w-3.5 h-3.5" />
-                <Link href="/soothe" className="hover:text-[#6B48C8] transition-colors">Soothe</Link>
+                <Link href="/playbook" className="hover:text-[#6B48C8] transition-colors">Playbook</Link>
                 <ChevronRight className="w-3.5 h-3.5" />
                 <span className="text-[#1a1b2e] font-semibold">Picture Book</span>
             </div>

@@ -56,10 +56,10 @@ interface AnalysisResultCardProps {
     saved: boolean;
     handleSave: () => void;
     onBoostWithAudio: (rawResult: unknown) => void;
-    onShowSoothePlan?: (need: string, confidence: number) => void;
+    onShowPlaybookPlan?: (need: string, confidence: number) => void;
 }
 
-export function AnalysisResultCard({ result, childrenData, selectedChild, feedbackGiven, setFeedbackGiven, saved, handleSave, onBoostWithAudio, onShowSoothePlan }: AnalysisResultCardProps) {
+export function AnalysisResultCard({ result, childrenData, selectedChild, feedbackGiven, setFeedbackGiven, saved, handleSave, onBoostWithAudio, onShowPlaybookPlan }: AnalysisResultCardProps) {
     const primaryScore = result.confidence ?? result.distress_score ?? 0;
     const severity = getSeverity(primaryScore);
     const distressLevel = getDistressLevel(result.distress_score ?? primaryScore);
@@ -245,10 +245,10 @@ export function AnalysisResultCard({ result, childrenData, selectedChild, feedba
                 </div>
             )}
 
-            {/* Soothe Plan CTA — Phase 2 */}
-            {result.need_label && (result.confidence ?? 0) >= 0.45 && onShowSoothePlan && (
+            {/* Playbook Plan CTA */}
+            {result.need_label && (result.confidence ?? 0) >= 0.45 && onShowPlaybookPlan && (
                 <button
-                    onClick={() => onShowSoothePlan(result.need_label!, result.confidence ?? 0)}
+                    onClick={() => onShowPlaybookPlan(result.need_label!, result.confidence ?? 0)}
                     className="w-full bg-gradient-to-r from-[#FFE5E0] to-[#FCECD8] border border-[#F3A595]/30 rounded-3xl p-5 flex items-center gap-4 hover:shadow-[0_8px_32px_-4px_rgba(0,0,0,0.1)] hover:-translate-y-0.5 transition-all duration-300 group"
                 >
                     <div className="w-12 h-12 rounded-2xl bg-white/80 flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
@@ -256,7 +256,7 @@ export function AnalysisResultCard({ result, childrenData, selectedChild, feedba
                     </div>
                     <div className="flex-1 text-left">
                         <p className="text-sm font-bold text-[#1a1b2e] font-[family-name:var(--font-sans)] mb-0.5">
-                            Get Soothe Plan
+                            Get Playbook Plan
                         </p>
                         <p className="text-xs text-[#4a4b5e]">
                             Personalised techniques for <span className="font-semibold capitalize">{result.need_label}</span> — ranked by what works

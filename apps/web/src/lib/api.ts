@@ -275,9 +275,9 @@ export async function analyzeCombined(
 }
 
 
-// ─── Soothe Engine API ──────────────────────────────────────
+// ─── Playbook (Care Playbook) API ───────────────────────────
 
-export interface SootheTechnique {
+export interface PlaybookTechnique {
     technique_id: string;
     name: string;
     description: string;
@@ -288,14 +288,14 @@ export interface SootheTechnique {
     total_feedback: number;
 }
 
-export interface SoothePlanResult {
+export interface PlaybookPlanResult {
     need: string;
     confidence: number;
-    techniques: SootheTechnique[];
+    techniques: PlaybookTechnique[];
     personalised: boolean;
 }
 
-export interface SootheFeedbackPayload {
+export interface PlaybookFeedbackPayload {
     child_id: string;
     need: string;
     technique_id: string;
@@ -304,34 +304,34 @@ export interface SootheFeedbackPayload {
     duration_seconds?: number;
 }
 
-export async function getSoothePlan(
+export async function getPlaybookPlan(
     token: string,
     childId: string,
     need: string,
     confidence: number = 0.0
-): Promise<SoothePlanResult> {
-    return apiFetch<SoothePlanResult>(
-        `/api/soothe/plan?child_id=${childId}&need=${need}&confidence=${confidence}`,
+): Promise<PlaybookPlanResult> {
+    return apiFetch<PlaybookPlanResult>(
+        `/api/playbook/plan?child_id=${childId}&need=${need}&confidence=${confidence}`,
         { token }
     );
 }
 
-export async function submitSootheFeedback(
+export async function submitPlaybookFeedback(
     token: string,
-    feedback: SootheFeedbackPayload
+    feedback: PlaybookFeedbackPayload
 ): Promise<{ success: boolean; feedback_id: string; message: string }> {
-    return apiFetch(`/api/soothe/feedback`, {
+    return apiFetch(`/api/playbook/feedback`, {
         token,
         method: "POST",
         body: JSON.stringify(feedback),
     });
 }
 
-export async function getSootheStats(
+export async function getPlaybookStats(
     token: string,
     childId: string
 ): Promise<{ child_id: string; total_feedback: number; techniques: unknown[] }> {
-    return apiFetch(`/api/soothe/stats/${childId}`, { token });
+    return apiFetch(`/api/playbook/stats/${childId}`, { token });
 }
 
 
@@ -547,7 +547,7 @@ export interface WeeklyNarrative {
     week_end: string;
     narrative: string;
     analysis_count: number;
-    soothe_count: number;
+    playbook_count: number;
     created_at?: string;
 }
 

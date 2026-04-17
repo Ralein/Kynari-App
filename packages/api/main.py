@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import get_settings
-from routers import children, events, summaries, analyze, feedback, context, soothe, soundscape, voice, books, memory
+from routers import children, events, summaries, analyze, feedback, context, playbook, soundscape, voice, books, memory
 from middleware.rate_limit import RateLimitMiddleware
 from middleware.audit import AuditLogMiddleware
 
@@ -99,7 +99,7 @@ app.include_router(summaries.router)
 app.include_router(analyze.router)
 app.include_router(feedback.router)
 app.include_router(context.router)
-app.include_router(soothe.router)
+app.include_router(playbook.router)
 app.include_router(soundscape.router)
 app.include_router(voice.router)
 app.include_router(books.router)

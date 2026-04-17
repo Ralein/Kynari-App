@@ -41,7 +41,7 @@ def _hour_in_range(hour: int, start: int, end: int) -> bool:
 
 
 def get_plan(child_id: str, need: str, hour: int | None = None) -> dict:
-    """Get a ranked soothe plan for a detected need.
+    """Get a ranked playbook plan for a detected need.
 
     Returns top 4 techniques, scored by base weight + personal history
     + time-of-day bonus.
@@ -161,7 +161,7 @@ def record_feedback(
     duration_seconds: int | None = None,
     notes: str | None = None,
 ) -> dict | None:
-    """Record parent feedback for a soothe technique."""
+    """Record parent feedback for a technique in the Playbook."""
     hour = datetime.now().hour
 
     return execute_returning(
@@ -204,7 +204,7 @@ def get_technique_stats(child_id: str) -> list[dict]:
 
 
 def list_techniques(need: str | None = None) -> list[dict]:
-    """List all soothe techniques, optionally filtered by need."""
+    """List all playbook techniques, optionally filtered by need."""
     if need:
         return fetch_all(
             """
