@@ -13,6 +13,7 @@ import {
     Volume2,
     VolumeX,
     Mic,
+    Moon,
 } from "lucide-react";
 
 export default function BookReaderPage() {
@@ -27,6 +28,7 @@ export default function BookReaderPage() {
     // Read Aloud state
     const [voices, setVoices] = useState<VoiceInfo[]>([]);
     const [selectedVoice, setSelectedVoice] = useState("af_sarah");
+    const [isSoothingMode, setIsSoothingMode] = useState(false);
     const [isReading, setIsReading] = useState(false);
     const [audioUrl, setAudioUrl] = useState<string | null>(null);
     const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -90,7 +92,8 @@ export default function BookReaderPage() {
             const token = await getToken();
             if (!token) { setIsReading(false); return; }
 
-            const blob = await speakText(token, selectedVoice, pageText);
+            const activeVoice = isSoothingMode ? "af_heart" : selectedVoice;
+            const blob = await speakText(token, activeVoice, pageText);
             const url = URL.createObjectURL(blob);
 
             // Clean previous URL
@@ -98,6 +101,7 @@ export default function BookReaderPage() {
             setAudioUrl(url);
 
             const audio = new Audio(url);
+            audio.playbackRate = isSoothingMode ? 0.85 : 1.0;
             audioRef.current = audio;
             audio.onended = () => setIsReading(false);
             audio.onerror = () => setIsReading(false);
@@ -182,6 +186,20 @@ export default function BookReaderPage() {
                             </option>
                         ))}
                     </select>
+
+                    {/* Soothing Mode Toggle */}
+                    <button
+                        onClick={() => setIsSoothingMode(!isSoothingMode)}
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-all ${
+                            isSoothingMode
+                                ? "bg-[#EAE2FB] border-[#6B48C8]/30 text-[#6B48C8] shadow-sm tracking-wide"
+                                : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                        }`}
+                        title="Plays slower with a warm voice for bedtime"
+                    >
+                        <Moon className={`w-3.5 h-3.5 ${isSoothingMode ? "fill-[#6B48C8]" : ""}`} />
+                        Soothing Mode
+                    </button>
 
                     {/* Read Aloud button */}
                     <button

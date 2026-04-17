@@ -144,8 +144,14 @@ export default function MemoryGardenPage() {
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
                 <div className="flex-1">
-                    <h1 className="text-2xl font-extrabold font-[family-name:var(--font-sans)] text-[#1a1b2e]">
+                    <h1 className="text-2xl font-extrabold font-[family-name:var(--font-sans)] text-[#1a1b2e] flex items-center flex-wrap gap-3">
                         Memory Garden
+                        {garden !== null && (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#7BC89D]/10 text-[#59A279] border border-[#7BC89D]/30 shadow-sm animate-fade-in">
+                                <Sprout className="w-3.5 h-3.5 mr-1" />
+                                {garden.total_milestones} Memories Planted
+                            </span>
+                        )}
                     </h1>
                     <p className="text-sm text-[#4a4b5e] mt-1">
                         A living journal of your baby&apos;s beautiful firsts.
@@ -169,9 +175,9 @@ export default function MemoryGardenPage() {
                 
                 <button
                     onClick={() => setShowAdd(!showAdd)}
-                    className="inline-flex items-center justify-center px-6 py-2.5 rounded-full bg-gradient-to-r from-[#7BC89D] to-[#B5EAC5] text-white text-sm font-semibold hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 shadow-[0_8px_20px_-6px_rgba(123,200,157,0.5)] gap-2 self-start sm:self-auto"
+                    className="inline-flex items-center justify-center px-6 py-2.5 rounded-full bg-gradient-to-r from-[#7BC89D] to-[#B5EAC5] text-[#1a1b2e] text-sm font-bold hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 shadow-[0_8px_20px_-6px_rgba(123,200,157,0.5)] gap-2 self-start sm:self-auto min-w-[160px]"
                 >
-                    {showAdd ? <Star className="w-4 h-4 fill-white animate-pulse" /> : <Plus className="w-4 h-4" />}
+                    {showAdd ? <Star className="w-4 h-4 text-[#1a1b2e] animate-pulse" /> : <Plus className="w-4 h-4 text-[#1a1b2e]" />}
                     {showAdd ? "Recording Firsts..." : "Add Milestone"}
                 </button>
             </div>

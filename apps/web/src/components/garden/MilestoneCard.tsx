@@ -34,8 +34,14 @@ export function MilestoneCard({
     const Icon = typeInfo.icon;
 
     return (
-        <div className={`bg-white/70 backdrop-blur-sm border border-white/80 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-5 group hover:shadow-[0_8px_32px_-4px_rgba(0,0,0,0.1)] transition-all duration-300 ${isDeleting ? "opacity-50 scale-95" : ""}`}>
-            <div className="flex items-start gap-3">
+        <div className={`relative overflow-hidden bg-white/70 backdrop-blur-md border border-white/60 shadow-[0_4px_24px_-4px_rgba(0,0,0,0.06)] rounded-3xl p-5 group hover:shadow-[0_8px_40px_-4px_rgba(0,0,0,0.1)] hover:-translate-y-1 transition-all duration-300 ${isDeleting ? "opacity-50 scale-95" : ""}`}>
+            {/* Decorative organic background element */}
+            <div 
+                className="absolute -top-12 -right-12 w-32 h-32 rounded-full blur-3xl opacity-20 pointer-events-none transition-opacity duration-300 group-hover:opacity-40"
+                style={{ backgroundColor: typeInfo.color }}
+            />
+            
+            <div className="relative z-10 flex items-start gap-3">
                 <div
                     className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0"
                     style={{ backgroundColor: `${typeInfo.color}20` }}
