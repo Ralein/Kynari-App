@@ -25,7 +25,9 @@ export function ProfileSelector({ profiles, activeProfile, onSelectProfile }: Pr
                                 : "bg-white/50 border-white/80 hover:bg-white/80"
                         }`}
                     >
-                        <span className="text-2xl">{profile.icon}</span>
+                        <span className={`p-1 ${activeProfile === profile.id ? "text-[#6B48C8]" : "text-slate-400"}`}>
+                            {profile.LucideIcon && <profile.LucideIcon className="w-6 h-6" />}
+                        </span>
                         <span className={`text-xs font-semibold ${
                             activeProfile === profile.id ? "text-[#6B48C8]" : "text-[#4a4b5e]"
                         }`}>

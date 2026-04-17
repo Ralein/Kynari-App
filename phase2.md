@@ -299,7 +299,7 @@ When a need is detected (e.g. Hungry, confidence 0.67), the Care Playbook surfac
 Detected Need + child_id + current_time
         │
         ▼
-GET /api/soothe/plan?child_id=&need=hungry
+GET /api/playbook/plan?child_id=&need=hungry
         │
         ▼
 PlaybookEngine.get_plan(child_id, need, hour_of_day)
@@ -353,7 +353,7 @@ Each need maps to 4–6 techniques. This is the initial seed; feedback personali
 ```
 Parent taps "This worked" or "Didn't help"
         │
-POST /api/soothe/feedback
+POST /api/playbook/feedback
   { child_id, need, technique_id, outcome: "success" | "fail", notes? }
         │
         ▼
@@ -367,7 +367,7 @@ PlaybookEngine re-scores on next plan request
 ### New Pydantic Models
 
 ```python
-# models/soothe.py
+# models/playbook.py
 
 class PlaybookTechnique(BaseModel):
     technique_id: str
@@ -381,7 +381,7 @@ class PlaybookTechnique(BaseModel):
 class PlaybookPlanResponse(BaseModel):
     need: str
     confidence: float
-    techniques: List[SootheTechnique]    # ranked, max 4
+    techniques: List[PlaybookTechnique]    # ranked, max 4
     personalised: bool                   # False until ≥5 feedback events for child
 
 class PlaybookFeedbackRequest(BaseModel):
@@ -397,8 +397,8 @@ class PlaybookFeedbackRequest(BaseModel):
 
 ```
 packages/api/services/
-  └── soothe_engine.py
-        ├── get_plan(child_id, need, hour) → SoothePlanResponse
+  └── playbook_engine.py
+        ├── get_plan(child_id, need, hour) → PlaybookPlanResponse
         ├── record_feedback(request) → None
         ├── get_technique_stats(child_id) → Dict[str, TechniqueStats]
         └── _score_techniques(techniques, history, hour) → List[scored]
@@ -698,14 +698,14 @@ All endpoints require `Authorization: Bearer <clerk_token>` and are registered i
 | `GET` | `/api/books/{book_id}/pdf` | Export book as PDF (binary response) |
 | `DELETE` | `/api/books/{book_id}` | Delete book + illustration assets |
 
-### Soothe Engine (`/api/soothe`)
+### Care Playbook (`/api/playbook`)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/soothe/plan` | `?child_id=&need=hungry` → ranked technique plan |
-| `GET` | `/api/soothe/techniques` | Full technique catalogue (admin / seeding) |
-| `POST` | `/api/soothe/feedback` | Record outcome for a technique |
-| `GET` | `/api/soothe/stats/{child_id}` | Per-child technique success rates |
+| `GET` | `/api/playbook/plan` | `?child_id=&need=hungry` → ranked technique plan |
+| `GET` | `/api/playbook/techniques` | Full technique catalogue (admin / seeding) |
+| `POST` | `/api/playbook/feedback` | Record outcome for a technique |
+| `GET` | `/api/playbook/stats/{child_id}` | Per-child technique success rates |
 
 ### Soundscape (`/api/soundscape`)
 
@@ -737,7 +737,7 @@ kynari/
 │   └── web/
 │       ├── app/
 │       │   ├── playbook/                 # NEW — Phase 2 main section
-│       │   │   ├── page.tsx              #   Soothe & Comfort dashboard
+│       │   │   ├── page.tsx              #   Care Playbook dashboard
 │       │   │   ├── voice/
 │       │   │   │   └── page.tsx          #   Voice Lullaby Studio
 │       │   │   ├── stories/
@@ -846,11 +846,11 @@ MILESTONE_CHECK_INTERVAL_MINUTES=60
 **Goal:** Ship the highest-value, lowest-dependency feature first.
 
 - [ ] DB migrations 007 (soothe tables) + seed techniques
-- [ ] `soothe_engine.py` service + Bayesian scoring
-- [ ] `POST /api/soothe/plan` + `POST /api/soothe/feedback`
-- [ ] `SoothePanel.tsx` — surfaces automatically from Phase 1 result card
+- [ ] `playbook_engine.py` service + Bayesian scoring
+- [ ] `POST /api/playbook/plan` + `POST /api/playbook/feedback`
+- [ ] `PlaybookPanel.tsx` — surfaces automatically from Phase 1 result card
 - [ ] `TechniqueCard.tsx`, `StepGuide.tsx`, `FeedbackButtons.tsx`
-- [ ] `SoothePlan.tsx` — ranked list with timer
+- [ ] `PlaybookPlan.tsx` — ranked list with timer
 - [ ] Unit tests: scoring logic, feedback recording, plan endpoint
 
 **Deliverable:** When Kynari detects "Hungry", a ranked 4-step soothing plan appears with a timer. Parent can mark what worked.
@@ -930,7 +930,7 @@ MILESTONE_CHECK_INTERVAL_MINUTES=60
 
 ### Phase 2f — Polish & Integration (Weeks 9–10)
 
-- [ ] Unified "Soothe & Comfort" tab in nav (surfaces all 5 features contextually)
+- [ ] Unified "Care Playbook" tab in nav (surfaces all 5 features contextually)
 - [ ] Phase 1 → Phase 2 trigger: result card shows relevant Phase 2 action
 - [ ] Onboarding flow for Phase 2 features (progressive disclosure)
 - [ ] Analytics: track feature adoption, session lengths, feedback rates
@@ -959,7 +959,7 @@ MILESTONE_CHECK_INTERVAL_MINUTES=60
 
 | Feature | Metric | Target |
 |---------|--------|--------|
-| Soothe plan | API response time | < 200ms |
+| Playbook plan | API response time | < 200ms |
 | Voice enrollment | End-to-end (3 samples → voice_id) | < 15s |
 | Lullaby generation | First audio byte | < 5s |
 | Picture book | Full 5-page generation | < 30s |
@@ -985,7 +985,7 @@ MILESTONE_CHECK_INTERVAL_MINUTES=60
 - **Risk:** SDXL occasionally generates inappropriate content despite negative prompts. Implement a post-generation moderation step (Amazon Rekognition or similar) before returning images to the client.
 - **Question:** Who owns the generated illustrations? IP review needed.
 
-### Soothe Engine Accuracy
+### Care Playbook Accuracy
 
 - **Risk:** The Bayesian scoring is simple and could converge on a single technique per child after enough feedback, reducing variety. Consider an exploration bonus (epsilon-greedy or Thompson sampling) to keep showing alternative techniques.
 

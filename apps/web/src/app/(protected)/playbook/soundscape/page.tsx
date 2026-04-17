@@ -11,20 +11,18 @@ import {
     type SoundscapeProfile,
 } from "@/lib/api";
 import {
-    ChevronRight,
-    Moon,
-    Play,
-    Pause,
-    Waves,
-    TreePine,
-    CloudRain,
-    Wind,
-    Settings2,
     Clock,
-    Loader2,
     Music,
     Volume2,
     Zap,
+    CloudRain,
+    Wind,
+    Waves,
+    TreePine,
+    Sparkles,
+    Wind as WindIcon,
+    Moon as MoonIcon,
+    CloudDrizzle,
 } from "lucide-react";
 import { ProfileSelector } from "@/components/soundscape/ProfileSelector";
 import { LayerMixer } from "@/components/soundscape/LayerMixer";
@@ -33,12 +31,12 @@ import { AutoAdaptBadge } from "@/components/soundscape/AutoAdaptBadge";
 
 // ─── Profile presets ────────────────────────────────────────
 
-const PROFILES: SoundscapeProfile[] = [
-    { id: "deep_sleep", name: "Deep Sleep", description: "Ocean waves with strong pink noise", pink_noise: 0.7, nature: 0.4, piano: 0.2, shush: 0.0, icon: "🌙" },
-    { id: "light_fuss", name: "Light Fuss", description: "Rain and piano, shush auto-activates", pink_noise: 0.5, nature: 0.3, piano: 0.3, shush: 0.0, icon: "🌧️" },
-    { id: "heavy_fuss", name: "Heavy Fuss", description: "Maximum masking — strong noise", pink_noise: 0.85, nature: 0.0, piano: 0.0, shush: 0.0, icon: "💨" },
-    { id: "nap_time", name: "Nap Time", description: "Forest ambience, light pink noise", pink_noise: 0.6, nature: 0.5, piano: 0.15, shush: 0.0, icon: "🌿" },
-    { id: "white_room", name: "White Room", description: "Pure pink noise only", pink_noise: 1.0, nature: 0.0, piano: 0.0, shush: 0.0, icon: "⬜" },
+const PROFILES: (SoundscapeProfile & { LucideIcon: any })[] = [
+    { id: "deep_sleep", name: "Deep Sleep", description: "Ocean waves with strong pink noise", pink_noise: 0.7, nature: 0.4, piano: 0.2, shush: 0.0, icon: "🌙", LucideIcon: MoonIcon },
+    { id: "light_fuss", name: "Light Fuss", description: "Rain and piano, shush auto-activates", pink_noise: 0.5, nature: 0.3, piano: 0.3, shush: 0.0, icon: "🌧️", LucideIcon: CloudDrizzle },
+    { id: "heavy_fuss", name: "Heavy Fuss", description: "Maximum masking — strong noise", pink_noise: 0.85, nature: 0.0, piano: 0.0, shush: 0.0, icon: "💨", LucideIcon: WindIcon },
+    { id: "nap_time", name: "Nap Time", description: "Forest ambience, light pink noise", pink_noise: 0.6, nature: 0.5, piano: 0.15, shush: 0.0, icon: "🌿", LucideIcon: TreePine },
+    { id: "white_room", name: "White Room", description: "Pure pink noise only", pink_noise: 1.0, nature: 0.0, piano: 0.0, shush: 0.0, icon: "⬜", LucideIcon: Sparkles },
 ];
 
 const NATURE_SOUNDS = [
@@ -58,9 +56,9 @@ interface LayerState {
 
 // Map nature sound ID → audio file
 const NATURE_FILE_MAP: Record<string, string> = {
-    ocean: "/sounds/ocean.ogg",
-    rain: "/sounds/rain.ogg",
-    forest: "/sounds/forest.ogg",
+    ocean: "/sounds/ocean.wav",
+    rain: "/sounds/rain.wav",
+    forest: "/sounds/forest.wav",
     none: "",
 };
 
@@ -102,10 +100,10 @@ export default function SoundscapePage() {
 
     // Start all audio layers
     const startAudio = useCallback(() => {
-        const pn = getOrCreateAudio(pinkNoiseRef, "/sounds/pink_noise.ogg");
+        const pn = getOrCreateAudio(pinkNoiseRef, "/sounds/pink_noise.wav");
         const ns = getOrCreateAudio(natureRef, NATURE_FILE_MAP[natureSound] || "");
-        const pi = getOrCreateAudio(pianoRef, "/sounds/piano.ogg");
-        const sh = getOrCreateAudio(shushRef, "/sounds/shush.ogg");
+        const pi = getOrCreateAudio(pianoRef, "/sounds/piano.wav");
+        const sh = getOrCreateAudio(shushRef, "/sounds/shush.wav");
 
         if (pn) { pn.volume = layers.pinkNoise; pn.play().catch(() => {}); }
         if (ns && natureSound !== "none") { ns.volume = layers.nature; ns.play().catch(() => {}); }
