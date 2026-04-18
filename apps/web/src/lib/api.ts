@@ -472,7 +472,7 @@ export async function generateLullabyBlob(
 }
 
 
-// ─── Picture Book API ───────────────────────────────────────
+// ─── Story Book API ─────────────────────────────────────────
 
 export interface BookPage {
     page_number: number;
@@ -586,7 +586,7 @@ export async function deleteMilestone(
 }
 
 
-// ─── Voice Speak API (Picture Book Read Aloud) ──────────────
+// ─── Voice Speak API (Story Book Read Aloud) ────────────────
 
 export async function speakText(
     token: string,

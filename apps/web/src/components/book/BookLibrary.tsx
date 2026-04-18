@@ -25,7 +25,7 @@ export function BookLibrary({ loading, books, onDelete }: BookLibraryProps) {
                 <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                 <p className="text-[#4a4b5e] font-medium mb-1">No stories yet</p>
                 <p className="text-sm text-slate-400">
-                    Create your first personalized picture book!
+                    Create your first personalized story book!
                 </p>
             </div>
         );

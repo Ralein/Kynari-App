@@ -129,7 +129,7 @@ export default function DashboardPage() {
                                     Care Playbook Suite
                                 </h2>
                                 <p className="text-sm text-[#4a4b5e] mt-1 line-clamp-2">
-                                    Adaptive sleep soundscapes, personalized picture books, lullabies in AI voices, and a living milestone garden.
+                                    Adaptive sleep soundscapes, personalized story books, lullabies in AI voices, and a living milestone garden.
                                 </p>
                             </div>
                         </div>
@@ -139,7 +139,7 @@ export default function DashboardPage() {
                             {[
                                 { label: "Sleep Soundscape", color: "#6B48C8" },
                                 { label: "Voice Lullaby", color: "#93E2FA" },
-                                { label: "Picture Book", color: "#F3A595" },
+                                { label: "Story Book", color: "#F3A595" },
                                 { label: "Memory Garden", color: "#7BC89D" },
                             ].map((f) => (
                                 <span

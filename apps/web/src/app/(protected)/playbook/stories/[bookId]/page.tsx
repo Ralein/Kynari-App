@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { getBook, getVoices, speakText, type BookResponse, type VoiceInfo } from "@/lib/api";
+import { getBook, type BookResponse, type VoiceInfo } from "@/lib/api";
+import { getTTSEngine, TTS_VOICES } from "@/lib/tts-engine";
 import {
     ChevronRight,
     ChevronLeft,
@@ -12,7 +13,6 @@ import {
     Loader2,
     Volume2,
     VolumeX,
-    Mic,
     Moon,
 } from "lucide-react";
 
@@ -26,61 +26,68 @@ export default function BookReaderPage() {
     const [currentPage, setCurrentPage] = useState(0);
 
     // Read Aloud state
-    const [voices, setVoices] = useState<VoiceInfo[]>([]);
+    const voices: VoiceInfo[] = TTS_VOICES.map((v) => ({
+        voice_id: v.id,
+        name: v.name,
+        gender: v.gender,
+        style: v.style,
+        description: v.description,
+    }));
     const [selectedVoice, setSelectedVoice] = useState("af_sarah");
     const [isSoothingMode, setIsSoothingMode] = useState(false);
     const [isReading, setIsReading] = useState(false);
-    const [audioUrl, setAudioUrl] = useState<string | null>(null);
-    const audioRef = useRef<HTMLAudioElement | null>(null);
 
     useEffect(() => {
         async function load() {
             try {
                 const token = await getToken();
                 if (!token) return;
-                const [bookData, voiceList] = await Promise.all([
-                    getBook(token, bookId),
-                    getVoices(token),
-                ]);
+                const bookData = await getBook(token, bookId);
                 setBook(bookData);
-                setVoices(voiceList);
             } catch { /* silent */ }
             finally { setLoading(false); }
         }
         load();
     }, [getToken, bookId]);
 
-    // Cleanup audio URL on unmount
+    // TTS Engine event listener
     useEffect(() => {
-        return () => {
-            if (audioUrl) URL.revokeObjectURL(audioUrl);
-        };
-    }, [audioUrl]);
+        const engine = getTTSEngine();
+        const unsub = engine.on((event) => {
+            switch (event) {
+                case "end":
+                case "error":
+                    setIsReading(false);
+                    break;
+            }
+        });
 
-    // Stop audio when changing pages
-    const stopAudio = useCallback(() => {
-        if (audioRef.current) {
-            audioRef.current.pause();
-            audioRef.current.currentTime = 0;
-        }
-        if (audioUrl) {
-            URL.revokeObjectURL(audioUrl);
-            setAudioUrl(null);
-        }
+        return () => {
+            unsub();
+            engine.stop();
+        };
+    }, []);
+
+    // Stop speech when changing pages
+    const stopSpeech = useCallback(() => {
+        const engine = getTTSEngine();
+        engine.stop();
         setIsReading(false);
-    }, [audioUrl]);
+    }, []);
 
     const handlePageChange = useCallback((newPage: number) => {
-        stopAudio();
+        stopSpeech();
         setCurrentPage(newPage);
-    }, [stopAudio]);
+    }, [stopSpeech]);
 
     const handleReadAloud = async () => {
         if (!book) return;
 
+        const engine = getTTSEngine();
+
         // If already reading, stop
         if (isReading) {
-            stopAudio();
+            stopSpeech();
             return;
         }
 
@@ -89,23 +96,11 @@ export default function BookReaderPage() {
 
         setIsReading(true);
         try {
-            const token = await getToken();
-            if (!token) { setIsReading(false); return; }
-
             const activeVoice = isSoothingMode ? "af_heart" : selectedVoice;
-            const blob = await speakText(token, activeVoice, pageText);
-            const url = URL.createObjectURL(blob);
-
-            // Clean previous URL
-            if (audioUrl) URL.revokeObjectURL(audioUrl);
-            setAudioUrl(url);
-
-            const audio = new Audio(url);
-            audio.playbackRate = isSoothingMode ? 0.85 : 1.0;
-            audioRef.current = audio;
-            audio.onended = () => setIsReading(false);
-            audio.onerror = () => setIsReading(false);
-            await audio.play();
+            await engine.speak(pageText, activeVoice, {
+                rate: isSoothingMode ? 0.75 : 0.9,
+                pitch: isSoothingMode ? 0.9 : 1.0,
+            });
         } catch {
             setIsReading(false);
         }
@@ -153,7 +148,7 @@ export default function BookReaderPage() {
                 <ChevronRight className="w-3.5 h-3.5" />
                 <Link href="/playbook" className="hover:text-[#6B48C8] transition-colors">Playbook</Link>
                 <ChevronRight className="w-3.5 h-3.5" />
-                <Link href="/playbook/stories" className="hover:text-[#6B48C8] transition-colors">Stories</Link>
+                <Link href="/playbook/stories" className="hover:text-[#6B48C8] transition-colors">Story Book</Link>
                 <ChevronRight className="w-3.5 h-3.5" />
                 <span className="text-[#1a1b2e] font-semibold truncate max-w-[200px]">
                     {book.title}
@@ -204,7 +199,6 @@ export default function BookReaderPage() {
                     {/* Read Aloud button */}
                     <button
                         onClick={handleReadAloud}
-                        disabled={isReading && !audioRef.current}
                         className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-200 shadow-sm ${
                             isReading
                                 ? "bg-[#F0897A] text-white shadow-[0_8px_20px_-6px_rgba(240,137,122,0.5)] hover:bg-[#E87A6A]"

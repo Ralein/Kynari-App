@@ -1,10 +1,10 @@
 "use client";
 
 import { BookOpen, Calendar } from "lucide-react";
-import { type garden_narrative } from "@/lib/api";
+import { type WeeklyNarrative as WeeklyNarrativeType } from "@/lib/api";
 
 interface WeeklyNarrativeProps {
-    narratives: garden_narrative[];
+    narratives: WeeklyNarrativeType[];
 }
 
 export function WeeklyNarrative({ narratives }: WeeklyNarrativeProps) {

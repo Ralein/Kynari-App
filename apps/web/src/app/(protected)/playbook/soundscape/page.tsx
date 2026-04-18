@@ -23,11 +23,18 @@ import {
     Wind as WindIcon,
     Moon as MoonIcon,
     CloudDrizzle,
+    ChevronRight,
+    Moon,
+    Play,
+    Pause,
+    Settings2,
+    Loader2,
 } from "lucide-react";
 import { ProfileSelector } from "@/components/soundscape/ProfileSelector";
 import { LayerMixer } from "@/components/soundscape/LayerMixer";
 import { NatureSoundSelector } from "@/components/soundscape/NatureSoundSelector";
 import { AutoAdaptBadge } from "@/components/soundscape/AutoAdaptBadge";
+import { SoundscapeEngine, type NatureSoundType, type LayerVolumes } from "@/lib/audio-engine";
 
 // ─── Profile presets ────────────────────────────────────────
 
@@ -54,14 +61,6 @@ interface LayerState {
     shush: number;
 }
 
-// Map nature sound ID → audio file
-const NATURE_FILE_MAP: Record<string, string> = {
-    ocean: "/sounds/ocean.wav",
-    rain: "/sounds/rain.wav",
-    forest: "/sounds/forest.wav",
-    none: "",
-};
-
 export default function SoundscapePage() {
     const { getToken } = useAuth();
     const { data: children } = useChildren();
@@ -82,82 +81,32 @@ export default function SoundscapePage() {
     const startTimeRef = useRef<Date | null>(null);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-    // ─── Audio Refs ──────────────────────────────────────────
-    const pinkNoiseRef = useRef<HTMLAudioElement | null>(null);
-    const natureRef = useRef<HTMLAudioElement | null>(null);
-    const pianoRef = useRef<HTMLAudioElement | null>(null);
-    const shushRef = useRef<HTMLAudioElement | null>(null);
+    // ─── Web Audio Engine ────────────────────────────────────
+    const engineRef = useRef<SoundscapeEngine | null>(null);
 
-    // Create or get an audio element with loop enabled
-    const getOrCreateAudio = useCallback((ref: React.MutableRefObject<HTMLAudioElement | null>, src: string) => {
-        if (!ref.current && src) {
-            ref.current = new Audio(src);
-            ref.current.loop = true;
-            ref.current.preload = "auto";
+    // Lazy-init the engine
+    const getEngine = useCallback(() => {
+        if (!engineRef.current) {
+            engineRef.current = new SoundscapeEngine();
         }
-        return ref.current;
+        return engineRef.current;
     }, []);
 
-    // Start all audio layers
-    const startAudio = useCallback(() => {
-        const pn = getOrCreateAudio(pinkNoiseRef, "/sounds/pink_noise.wav");
-        const ns = getOrCreateAudio(natureRef, NATURE_FILE_MAP[natureSound] || "");
-        const pi = getOrCreateAudio(pianoRef, "/sounds/piano.wav");
-        const sh = getOrCreateAudio(shushRef, "/sounds/shush.wav");
-
-        if (pn) { pn.volume = layers.pinkNoise; pn.play().catch(() => {}); }
-        if (ns && natureSound !== "none") { ns.volume = layers.nature; ns.play().catch(() => {}); }
-        if (pi) { pi.volume = layers.piano; pi.play().catch(() => {}); }
-        if (sh) { sh.volume = layers.shush; sh.play().catch(() => {}); }
-    }, [getOrCreateAudio, layers, natureSound]);
-
-    // Stop all audio layers
-    const stopAudio = useCallback(() => {
-        [pinkNoiseRef, natureRef, pianoRef, shushRef].forEach((ref) => {
-            if (ref.current) {
-                ref.current.pause();
-                ref.current.currentTime = 0;
-            }
-        });
-    }, []);
-
-    // Destroy all audio elements (cleanup)
-    const destroyAudio = useCallback(() => {
-        [pinkNoiseRef, natureRef, pianoRef, shushRef].forEach((ref) => {
-            if (ref.current) {
-                ref.current.pause();
-                ref.current.src = "";
-                ref.current = null;
-            }
-        });
-    }, []);
-
-    // Sync layer volumes to audio elements in real-time
+    // Sync layer volumes to audio engine in real-time
     useEffect(() => {
         if (!isPlaying) return;
-        if (pinkNoiseRef.current) pinkNoiseRef.current.volume = layers.pinkNoise;
-        if (natureRef.current) natureRef.current.volume = layers.nature;
-        if (pianoRef.current) pianoRef.current.volume = layers.piano;
-        if (shushRef.current) shushRef.current.volume = layers.shush;
+        const engine = engineRef.current;
+        if (engine) {
+            engine.setVolumes(layers);
+        }
     }, [layers, isPlaying]);
 
     // Handle nature sound switching while playing
     useEffect(() => {
         if (!isPlaying) return;
-        // Stop old nature audio
-        if (natureRef.current) {
-            natureRef.current.pause();
-            natureRef.current.src = "";
-            natureRef.current = null;
-        }
-        // Start new one if not "none"
-        const src = NATURE_FILE_MAP[natureSound];
-        if (src) {
-            const audio = new Audio(src);
-            audio.loop = true;
-            audio.volume = layers.nature;
-            natureRef.current = audio;
-            audio.play().catch(() => {});
+        const engine = engineRef.current;
+        if (engine) {
+            engine.switchNature(natureSound as NatureSoundType);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [natureSound]);
@@ -165,10 +114,13 @@ export default function SoundscapePage() {
     // Cleanup on unmount
     useEffect(() => {
         return () => {
-            destroyAudio();
+            const engine = engineRef.current;
+            if (engine && engine.playing) {
+                engine.stop();
+            }
             if (timerRef.current) clearInterval(timerRef.current);
         };
-    }, [destroyAudio]);
+    }, []);
 
     // Auto-select first child
     useEffect(() => {
@@ -218,8 +170,9 @@ export default function SoundscapePage() {
 
     const togglePlay = useCallback(() => {
         if (isPlaying) {
-            // Stop audio
-            stopAudio();
+            // Stop engine
+            const engine = engineRef.current;
+            if (engine) engine.stop();
             setIsPlaying(false);
             if (timerRef.current) clearInterval(timerRef.current);
 
@@ -243,15 +196,16 @@ export default function SoundscapePage() {
             setElapsed(0);
             startTimeRef.current = null;
         } else {
-            // Start audio
-            startAudio();
+            // Start engine
+            const engine = getEngine();
+            engine.start(layers, natureSound as NatureSoundType);
             setIsPlaying(true);
             startTimeRef.current = new Date();
             timerRef.current = setInterval(() => {
                 setElapsed((e) => e + 1);
             }, 1000);
         }
-    }, [isPlaying, selectedChild, elapsed, activeProfile, autoAdapt, getToken, startAudio, stopAudio]);
+    }, [isPlaying, selectedChild, elapsed, activeProfile, autoAdapt, getToken, getEngine, layers, natureSound]);
 
     const savePrefs = async () => {
         if (!selectedChild) return;
@@ -340,6 +294,23 @@ export default function SoundscapePage() {
                         </div>
                     )}
                 </div>
+
+                {/* Audio Visualization */}
+                {isPlaying && (
+                    <div className="mt-6 flex items-center justify-center gap-1 animate-fade-in">
+                        {[...Array(12)].map((_, i) => (
+                            <div
+                                key={i}
+                                className="w-1 bg-[#6B48C8]/40 rounded-full animate-pulse"
+                                style={{
+                                    height: `${8 + Math.random() * 20}px`,
+                                    animationDelay: `${i * 0.1}s`,
+                                    animationDuration: `${0.8 + Math.random() * 0.6}s`,
+                                }}
+                            />
+                        ))}
+                    </div>
+                )}
             </div>
 
             {/* Profile Selector */}

@@ -49,7 +49,7 @@ const FEATURES = [
     },
     {
         id: "stories",
-        title: "Picture Book",
+        title: "Story Book",
         description: "Generate personalized illustrated storybooks starring your little one.",
         icon: BookOpen,
         href: "/playbook/stories",

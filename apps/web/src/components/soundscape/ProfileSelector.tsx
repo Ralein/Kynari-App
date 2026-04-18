@@ -2,8 +2,10 @@
 
 import { type SoundscapeProfile } from "@/lib/api";
 
+type ProfileWithIcon = SoundscapeProfile & { LucideIcon?: React.ComponentType<{ className?: string }> };
+
 interface ProfileSelectorProps {
-    profiles: SoundscapeProfile[];
+    profiles: ProfileWithIcon[];
     activeProfile: string;
     onSelectProfile: (profileId: string) => void;
 }

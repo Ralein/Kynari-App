@@ -111,17 +111,17 @@ export default function StoriesPage() {
                 <ChevronRight className="w-3.5 h-3.5" />
                 <Link href="/playbook" className="hover:text-[#6B48C8] transition-colors">Playbook</Link>
                 <ChevronRight className="w-3.5 h-3.5" />
-                <span className="text-[#1a1b2e] font-semibold">Picture Book</span>
+                <span className="text-[#1a1b2e] font-semibold">Story Book</span>
             </div>
 
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6">
                 <div>
                     <h1 className="text-2xl font-extrabold font-[family-name:var(--font-sans)] text-[#1a1b2e]">
-                        AI Picture Book
+                        AI Story Book
                     </h1>
                     <p className="text-sm text-[#4a4b5e] mt-1">
-                        Personalized illustrated stories starring your little one.
+                        Personalized illustrated storybooks starring your little one.
                     </p>
                 </div>
                 <button
