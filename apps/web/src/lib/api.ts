@@ -345,6 +345,7 @@ export interface SoundscapeProfile {
     nature: number;
     piano: number;
     shush: number;
+    heartbeat: number;
     icon: string;
 }
 

@@ -29,6 +29,8 @@ import {
     Pause,
     Settings2,
     Loader2,
+    Fish,
+    Activity,
 } from "lucide-react";
 import { ProfileSelector } from "@/components/soundscape/ProfileSelector";
 import { LayerMixer } from "@/components/soundscape/LayerMixer";
@@ -38,19 +40,30 @@ import { SoundscapeEngine, type NatureSoundType, type LayerVolumes } from "@/lib
 
 // ─── Profile presets ────────────────────────────────────────
 
-const PROFILES: (SoundscapeProfile & { LucideIcon: any })[] = [
-    { id: "deep_sleep", name: "Deep Sleep", description: "Ocean waves with strong pink noise", pink_noise: 0.7, nature: 0.4, piano: 0.2, shush: 0.0, icon: "🌙", LucideIcon: MoonIcon },
-    { id: "light_fuss", name: "Light Fuss", description: "Rain and piano, shush auto-activates", pink_noise: 0.5, nature: 0.3, piano: 0.3, shush: 0.0, icon: "🌧️", LucideIcon: CloudDrizzle },
-    { id: "heavy_fuss", name: "Heavy Fuss", description: "Maximum masking — strong noise", pink_noise: 0.85, nature: 0.0, piano: 0.0, shush: 0.0, icon: "💨", LucideIcon: WindIcon },
-    { id: "nap_time", name: "Nap Time", description: "Forest ambience, light pink noise", pink_noise: 0.6, nature: 0.5, piano: 0.15, shush: 0.0, icon: "🌿", LucideIcon: TreePine },
-    { id: "white_room", name: "White Room", description: "Pure pink noise only", pink_noise: 1.0, nature: 0.0, piano: 0.0, shush: 0.0, icon: "⬜", LucideIcon: Sparkles },
+const PROFILES: (SoundscapeProfile & { LucideIcon: any; muffled?: boolean })[] = [
+    { id: "deep_sleep", name: "Deep Dream", description: "Spatialized sine-clusters and deep bass", pink_noise: 0.7, nature: 0.4, piano: 0.2, shush: 0.0, heartbeat: 0.0, icon: "🌙", LucideIcon: MoonIcon },
+    { id: "light_fuss", name: "Silk Breeze", description: "Hiss-free rain textures and soft piano", pink_noise: 0.5, nature: 0.3, piano: 0.3, shush: 0.0, heartbeat: 0.0, icon: "🌧️", LucideIcon: CloudDrizzle },
+    { id: "heavy_fuss", name: "Harmonic Shield", description: "Maximum sonic masking — zero-hiss", pink_noise: 0.85, nature: 0.0, piano: 0.0, shush: 0.0, heartbeat: 0.0, icon: "🌬️", LucideIcon: WindIcon },
+    { id: "womb", name: "Organic Womb", description: "Distant heartbeat in a liquid space", pink_noise: 0.6, nature: 0.0, piano: 0.0, shush: 0.0, heartbeat: 0.8, icon: "🤰", LucideIcon: Activity, muffled: true },
+    { id: "underwater", name: "Deep Water", description: "Resonant abyss and whale calls", pink_noise: 0.2, nature: 0.7, piano: 0.1, shush: 0.0, heartbeat: 0.0, icon: "🐋", LucideIcon: Fish, muffled: true },
 ];
+
+
 
 const NATURE_SOUNDS = [
     { id: "ocean", name: "Ocean", icon: Waves },
     { id: "rain", name: "Rain", icon: CloudRain },
     { id: "forest", name: "Forest", icon: TreePine },
+    { id: "whale", name: "Whale", icon: Fish },
     { id: "none", name: "None", icon: Wind },
+];
+
+const TIMER_OPTIONS = [
+    { label: "Infinite", value: 0 },
+    { label: "15m", value: 15 },
+    { label: "30m", value: 30 },
+    { label: "1h", value: 60 },
+    { label: "2h", value: 120 },
 ];
 
 // Layer config
@@ -59,6 +72,7 @@ interface LayerState {
     nature: number;
     piano: number;
     shush: number;
+    heartbeat: number;
 }
 
 export default function SoundscapePage() {
@@ -75,8 +89,11 @@ export default function SoundscapePage() {
         nature: 0.4,
         piano: 0.2,
         shush: 0.0,
+        heartbeat: 0.0,
     });
     const [saving, setSaving] = useState(false);
+    const [timerSettings, setTimerSettings] = useState<number>(0);
+    const [isFadingOut, setIsFadingOut] = useState(false);
 
     const startTimeRef = useRef<Date | null>(null);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -101,6 +118,16 @@ export default function SoundscapePage() {
         }
     }, [layers, isPlaying]);
 
+    // Sync muffling state to audio engine
+    useEffect(() => {
+        if (!isPlaying) return;
+        const profile = PROFILES.find((p) => p.id === activeProfile);
+        const engine = engineRef.current;
+        if (engine) {
+            engine.setMuffled(!!profile?.muffled);
+        }
+    }, [activeProfile, isPlaying]);
+
     // Handle nature sound switching while playing
     useEffect(() => {
         if (!isPlaying) return;
@@ -110,6 +137,7 @@ export default function SoundscapePage() {
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [natureSound]);
+
 
     // Cleanup on unmount
     useEffect(() => {
@@ -121,6 +149,23 @@ export default function SoundscapePage() {
             if (timerRef.current) clearInterval(timerRef.current);
         };
     }, []);
+
+    // Timer fade-out logic
+    useEffect(() => {
+        if (isPlaying && timerSettings > 0 && !isFadingOut) {
+            const remaining = timerSettings * 60 - elapsed;
+            if (remaining === 10) {
+                setIsFadingOut(true);
+                const engine = engineRef.current;
+                if (engine) engine.fadeOutAndStop(10);
+            }
+            if (remaining <= 0) {
+                setIsPlaying(false);
+                setIsFadingOut(false);
+                if (timerRef.current) clearInterval(timerRef.current);
+            }
+        }
+    }, [elapsed, isPlaying, timerSettings, isFadingOut]);
 
     // Auto-select first child
     useEffect(() => {
@@ -147,6 +192,7 @@ export default function SoundscapePage() {
                         nature: profile.nature,
                         piano: profile.piano,
                         shush: profile.shush,
+                        heartbeat: profile.heartbeat,
                     });
                 }
             } catch {
@@ -165,6 +211,7 @@ export default function SoundscapePage() {
             nature: profile.nature,
             piano: profile.piano,
             shush: profile.shush,
+            heartbeat: profile.heartbeat,
         });
     };
 
@@ -174,6 +221,7 @@ export default function SoundscapePage() {
             const engine = engineRef.current;
             if (engine) engine.stop();
             setIsPlaying(false);
+            setIsFadingOut(false);
             if (timerRef.current) clearInterval(timerRef.current);
 
             // Log session
@@ -197,14 +245,17 @@ export default function SoundscapePage() {
             startTimeRef.current = null;
         } else {
             // Start engine
+            setIsFadingOut(false);
             const engine = getEngine();
-            engine.start(layers, natureSound as NatureSoundType);
+            const profile = PROFILES.find((p) => p.id === activeProfile);
+            engine.start(layers, natureSound as NatureSoundType, !!profile?.muffled);
             setIsPlaying(true);
             startTimeRef.current = new Date();
             timerRef.current = setInterval(() => {
                 setElapsed((e) => e + 1);
             }, 1000);
         }
+
     }, [isPlaying, selectedChild, elapsed, activeProfile, autoAdapt, getToken, getEngine, layers, natureSound]);
 
     const savePrefs = async () => {
@@ -250,7 +301,7 @@ export default function SoundscapePage() {
                     Sleep Soundscape
                 </h1>
                 <p className="text-sm text-[#4a4b5e] mt-1">
-                    Layered sounds that adapt to your baby&apos;s needs.
+                    Binaural harmonic textures that adapt to your baby&apos;s needs.
                 </p>
             </div>
 
@@ -270,27 +321,49 @@ export default function SoundscapePage() {
                 </div>
 
                 {/* Play/Stop + Timer */}
-                <div className="flex items-center justify-center gap-6">
-                    <button
-                        onClick={togglePlay}
-                        className={`w-20 h-20 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 ${
-                            isPlaying
-                                ? "bg-[#F0897A] hover:bg-[#E87A6A] scale-105"
-                                : "bg-gradient-to-r from-[#6B48C8] to-[#8B6CDB] hover:shadow-xl hover:scale-105"
-                        }`}
-                    >
-                        {isPlaying ? (
-                            <Pause className="w-8 h-8 text-white" />
-                        ) : (
-                            <Play className="w-8 h-8 text-white ml-1" />
+                <div className="flex flex-col items-center gap-5">
+                    <div className="flex items-center justify-center gap-6">
+                        <button
+                            onClick={togglePlay}
+                            className={`w-20 h-20 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 ${
+                                isPlaying
+                                    ? "bg-[#F0897A] hover:bg-[#E87A6A] scale-105"
+                                    : "bg-gradient-to-r from-[#6B48C8] to-[#8B6CDB] hover:shadow-xl hover:scale-105"
+                            }`}
+                        >
+                            {isPlaying ? (
+                                <Pause className="w-8 h-8 text-white" />
+                            ) : (
+                                <Play className="w-8 h-8 text-white ml-1" />
+                            )}
+                        </button>
+                        {isPlaying && (
+                            <div className="flex items-center gap-2 text-[#1a1b2e] animate-fade-in">
+                                <Clock className="w-4 h-4 text-[#6B48C8]" />
+                                <span className={`text-2xl font-mono font-bold tracking-wider ${isFadingOut ? 'opacity-50 animate-pulse text-[#E87A6A]' : ''}`}>
+                                    {timerSettings > 0 ? formatTime(Math.max(0, timerSettings * 60 - Math.min(elapsed, timerSettings * 60))) : formatTime(elapsed)}
+                                </span>
+                            </div>
                         )}
-                    </button>
-                    {isPlaying && (
-                        <div className="flex items-center gap-2 text-[#1a1b2e] animate-fade-in">
-                            <Clock className="w-4 h-4 text-[#6B48C8]" />
-                            <span className="text-2xl font-mono font-bold tracking-wider">
-                                {formatTime(elapsed)}
-                            </span>
+                    </div>
+
+                    {/* Timer Control Options */}
+                    {!isPlaying && (
+                        <div className="flex items-center justify-center gap-2 w-full animate-fade-in">
+                            <Clock className="w-3.5 h-3.5 text-slate-400 mr-1" />
+                            {TIMER_OPTIONS.map((opt) => (
+                                <button
+                                    key={opt.value}
+                                    onClick={() => setTimerSettings(opt.value)}
+                                    className={`px-3 py-1.5 text-[11px] font-bold rounded-full transition-all duration-200 ${
+                                        timerSettings === opt.value
+                                            ? "bg-[#6B48C8] text-white shadow-sm"
+                                            : "bg-white/60 text-[#4a4b5e] hover:bg-white"
+                                    }`}
+                                >
+                                    {opt.label}
+                                </button>
+                            ))}
                         </div>
                     )}
                 </div>

@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { getBook, type BookResponse, type VoiceInfo } from "@/lib/api";
-import { getTTSEngine, TTS_VOICES } from "@/lib/tts-engine";
+import { getBook, getVoices, speakText, type BookResponse, type VoiceInfo } from "@/lib/api";
 import {
     ChevronRight,
     ChevronLeft,
@@ -22,57 +21,59 @@ export default function BookReaderPage() {
     const bookId = params.bookId as string;
 
     const [book, setBook] = useState<BookResponse | null>(null);
+    const [voices, setVoices] = useState<VoiceInfo[]>([]);
     const [loading, setLoading] = useState(true);
     const [currentPage, setCurrentPage] = useState(0);
 
     // Read Aloud state
-    const voices: VoiceInfo[] = TTS_VOICES.map((v) => ({
-        voice_id: v.id,
-        name: v.name,
-        gender: v.gender,
-        style: v.style,
-        description: v.description,
-    }));
     const [selectedVoice, setSelectedVoice] = useState("af_sarah");
     const [isSoothingMode, setIsSoothingMode] = useState(false);
     const [isReading, setIsReading] = useState(false);
+    const [generating, setGenerating] = useState(false);
+
+    // Audio Ref
+    const audioRef = useRef<HTMLAudioElement | null>(null);
 
     useEffect(() => {
         async function load() {
             try {
                 const token = await getToken();
                 if (!token) return;
-                const bookData = await getBook(token, bookId);
+                
+                const [bookData, voicesData] = await Promise.all([
+                    getBook(token, bookId),
+                    getVoices(token),
+                ]);
+                
                 setBook(bookData);
-            } catch { /* silent */ }
-            finally { setLoading(false); }
+                setVoices(voicesData);
+            } catch (err) {
+                console.error("Failed to load book or voices:", err);
+            } finally {
+                setLoading(false);
+            }
         }
         load();
     }, [getToken, bookId]);
 
-    // TTS Engine event listener
+    // Cleanup audio on unmount
     useEffect(() => {
-        const engine = getTTSEngine();
-        const unsub = engine.on((event) => {
-            switch (event) {
-                case "end":
-                case "error":
-                    setIsReading(false);
-                    break;
-            }
-        });
-
         return () => {
-            unsub();
-            engine.stop();
+            if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current = null;
+            }
         };
     }, []);
 
-    // Stop speech when changing pages
+    // Stop speech
     const stopSpeech = useCallback(() => {
-        const engine = getTTSEngine();
-        engine.stop();
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current = null;
+        }
         setIsReading(false);
+        setGenerating(false);
     }, []);
 
     const handlePageChange = useCallback((newPage: number) => {
@@ -81,9 +82,7 @@ export default function BookReaderPage() {
     }, [stopSpeech]);
 
     const handleReadAloud = async () => {
-        if (!book) return;
-
-        const engine = getTTSEngine();
+        if (!book || generating) return;
 
         // If already reading, stop
         if (isReading) {
@@ -94,22 +93,37 @@ export default function BookReaderPage() {
         const pageText = book.pages[currentPage]?.text;
         if (!pageText) return;
 
-        setIsReading(true);
+        setGenerating(true);
         try {
+            const token = await getToken();
+            if (!token) throw new Error("No token");
+
             const activeVoice = isSoothingMode ? "af_heart" : selectedVoice;
-            await engine.speak(pageText, activeVoice, {
-                rate: isSoothingMode ? 0.75 : 0.9,
-                pitch: isSoothingMode ? 0.9 : 1.0,
-            });
-        } catch {
+            const blob = await speakText(token, activeVoice, pageText);
+            const url = URL.createObjectURL(blob);
+
+            const audio = new Audio(url);
+            audioRef.current = audio;
+            
+            audio.onended = () => {
+                setIsReading(false);
+            };
+
+            await audio.play();
+            setIsReading(true);
+        } catch (err) {
+            console.error("Read Aloud failed:", err);
             setIsReading(false);
+        } finally {
+            setGenerating(false);
         }
     };
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center py-20">
-                <Loader2 className="w-8 h-8 animate-spin text-[#F0897A]" />
+            <div className="flex flex-col items-center justify-center py-20">
+                <Loader2 className="w-8 h-8 animate-spin text-[#F0897A] mb-4" />
+                <p className="text-slate-500 text-sm">Loading Story Book...</p>
             </div>
         );
     }
@@ -190,7 +204,7 @@ export default function BookReaderPage() {
                                 ? "bg-[#EAE2FB] border-[#6B48C8]/30 text-[#6B48C8] shadow-sm tracking-wide"
                                 : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
                         }`}
-                        title="Plays slower with a warm voice for bedtime"
+                        title="Plays a warm voice for bedtime"
                     >
                         <Moon className={`w-3.5 h-3.5 ${isSoothingMode ? "fill-[#6B48C8]" : ""}`} />
                         Soothing Mode
@@ -199,13 +213,21 @@ export default function BookReaderPage() {
                     {/* Read Aloud button */}
                     <button
                         onClick={handleReadAloud}
+                        disabled={generating}
                         className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-200 shadow-sm ${
                             isReading
                                 ? "bg-[#F0897A] text-white shadow-[0_8px_20px_-6px_rgba(240,137,122,0.5)] hover:bg-[#E87A6A]"
+                                : generating
+                                ? "bg-slate-200 text-slate-400 cursor-not-allowed"
                                 : "bg-gradient-to-r from-[#F0897A] to-[#EFA192] text-white shadow-[0_8px_20px_-6px_rgba(240,137,122,0.5)] hover:shadow-lg hover:-translate-y-0.5"
                         }`}
                     >
-                        {isReading ? (
+                        {generating ? (
+                            <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Thinking...
+                            </>
+                        ) : isReading ? (
                             <>
                                 <VolumeX className="w-4 h-4" />
                                 Stop
@@ -236,14 +258,14 @@ export default function BookReaderPage() {
                     </p>
                 </div>
 
-                {/* Reading indicator */}
-                {isReading && (
+                {/* Reading or Generating indicator */}
+                {(isReading || generating) && (
                     <div className="mt-6 flex items-center justify-center gap-2 animate-fade-in">
                         <div className="flex items-center gap-1">
                             {[...Array(4)].map((_, i) => (
                                 <div
                                     key={i}
-                                    className="w-1 bg-[#F0897A] rounded-full animate-pulse"
+                                    className={`w-1 bg-[#F0897A] rounded-full ${isReading ? "animate-pulse" : "animate-bounce"}`}
                                     style={{
                                         height: `${12 + Math.random() * 12}px`,
                                         animationDelay: `${i * 0.15}s`,
@@ -251,7 +273,9 @@ export default function BookReaderPage() {
                                 />
                             ))}
                         </div>
-                        <span className="text-xs text-[#F0897A] font-medium ml-2">Reading aloud...</span>
+                        <span className="text-xs text-[#F0897A] font-medium ml-2">
+                            {generating ? "Waking up natural voice..." : "Reading aloud..."}
+                        </span>
                     </div>
                 )}
 

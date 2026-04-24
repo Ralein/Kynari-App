@@ -13,6 +13,13 @@ from database import fetch_one, execute_returning
 
 logger = logging.getLogger(__name__)
 
+# ─── Model Paths ─────────────────────────────────────────────
+
+BASE_DIR = Path(__file__).parent.parent
+MODEL_PATH = BASE_DIR / "kokoro-v1.0.onnx"
+VOICES_PATH = BASE_DIR / "voices-v1.0.bin"
+
+
 # ─── Available Kokoro Voices ─────────────────────────────────
 
 VOICES = [
@@ -143,6 +150,8 @@ def _clean_text_for_tts(text: str) -> str:
     text = re.sub(r"\*(.*?)\*", r"\1", text)
     text = re.sub(r"#{1,6}\s*", "", text)
     text = re.sub(r"\[([^\]]+)\]\([^\)]+\)", r"\1", text)
+    # Replace line breaks with spaces to ensure smooth, continuous speech flow
+    text = text.replace("\n", " ")
     return text.strip()
 
 
@@ -165,8 +174,9 @@ async def generate_lullaby_audio(voice_id: str, lullaby_id: str) -> bytes | None
         import kokoro_onnx
         import soundfile as sf
 
-        kokoro = kokoro_onnx.Kokoro("kokoro-v1.0.onnx", "voices-v1.0.bin")
-        samples, sample_rate = kokoro.create(text, voice=voice_id, speed=0.85, lang="en-us")
+        kokoro = kokoro_onnx.Kokoro(str(MODEL_PATH), str(VOICES_PATH))
+        # Match Story Book speed (0.9) for better natural rhythm
+        samples, sample_rate = kokoro.create(text, voice=voice_id, speed=0.9, lang="en-us")
 
         # Write to WAV bytes
         buf = io.BytesIO()
@@ -197,7 +207,7 @@ async def generate_speech(voice_id: str, text: str) -> bytes | None:
         import kokoro_onnx
         import soundfile as sf
 
-        kokoro = kokoro_onnx.Kokoro("kokoro-v1.0.onnx", "voices-v1.0.bin")
+        kokoro = kokoro_onnx.Kokoro(str(MODEL_PATH), str(VOICES_PATH))
         samples, sample_rate = kokoro.create(text, voice=voice_id, speed=0.9, lang="en-us")
 
         buf = io.BytesIO()

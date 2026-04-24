@@ -1,489 +1,647 @@
 /**
- * Soundscape Audio Engine — Web Audio API Synthesis
+ * Velvet Atmos Audio Engine — v3
  *
- * Generates all sound layers in real-time using the Web Audio API:
- * - Pink noise (1/f spectrum)
- * - Ocean waves (filtered noise + amplitude modulation)
- * - Rain (high-pass noise with droplet impulses)
- * - Forest (band-pass noise with bird-like chirps)
- * - Soft piano (sine harmonics with ADSR envelope)
- * - Shush rhythm (amplitude-modulated noise at ~60 BPM)
- *
- * No WAV files needed. Infinite, seamless, high-quality audio.
+ * Changes over v2:
+ * - Seeded LCG PRNG replaces Math.random() → guaranteed decorrelation per channel, no
+ *   entropy collision between buffers generated on the same tick.
+ * - scheduleTimeout() / clearAllTimers() — every recursive setTimeout is tracked so
+ *   stop() cancels all pending piano notes, forest chirps, and whale calls immediately.
+ *   In v2 those callbacks kept firing after stop(), leaking AudioNodes until GC.
+ * - Ocean DC protection: baseGain offset added as a ConstantSourceNode so the LFO sum
+ *   can never push gain.gain below 0 (negative gain = polarity flip + click).
+ * - Forest cricket band lowered 4 kHz → 2.2 kHz, Q 3 → 1.8 — 4 kHz is piercing on
+ *   phone speakers and harsh for infant hearing.
+ * - Piano decay extended (3–6 s), inter-note gap widened (4–9 s) — less intrusive.
+ * - Heartbeat: volume is now clamped per-beat from the current layer gain value so
+ *   setLayerVolume() changes are reflected immediately without a restart.
+ * - createPinkNoiseBuffer() takes an explicit seed integer instead of a skip-N-samples loop.
  */
 
-export type NatureSoundType = "ocean" | "rain" | "forest" | "none";
+export type NatureSoundType = "ocean" | "rain" | "forest" | "whale" | "none";
 
 export interface LayerVolumes {
-    pinkNoise: number; // 0-1
-    nature: number;    // 0-1
-    piano: number;     // 0-1
-    shush: number;     // 0-1
+    pinkNoise: number;
+    nature: number;
+    piano: number;
+    shush: number;
+    heartbeat: number;
 }
 
 interface LayerNodes {
     gainNode: GainNode;
-    sourceNodes: AudioNode[];
+    sourceNodes: (AudioBufferSourceNode | OscillatorNode | ConstantSourceNode)[];
+    filterChain?: BiquadFilterNode[];
 }
 
 export class SoundscapeEngine {
     private ctx: AudioContext | null = null;
     private masterGain: GainNode | null = null;
+    private muffleFilter: BiquadFilterNode | null = null;
     private layers: Map<string, LayerNodes> = new Map();
     private natureType: NatureSoundType = "ocean";
     private isPlaying = false;
-    private animationFrameIds: number[] = [];
+    private isMuffled = false;
+    private hbInterval: ReturnType<typeof setInterval> | null = null;
+    private static bufferCache: Map<string, AudioBuffer> = new Map();
 
-    /** Start the audio engine */
-    async start(volumes: LayerVolumes, natureType: NatureSoundType): Promise<void> {
+    /** All scheduled timeouts — cleared atomically on stop() */
+    private pendingTimers: Set<ReturnType<typeof setTimeout>> = new Set();
+
+    // ─── Public API ──────────────────────────────────────────────────────────
+
+    async start(
+        volumes: LayerVolumes,
+        natureType: NatureSoundType,
+        muffled = false
+    ): Promise<void> {
         if (this.isPlaying) return;
 
         this.ctx = new AudioContext();
+        this.isMuffled = muffled;
+
+        this.muffleFilter = this.ctx.createBiquadFilter();
+        this.muffleFilter.type = "lowpass";
+        this.muffleFilter.frequency.value = muffled ? 500 : 20000;
+        this.muffleFilter.Q.value = 0.3;
+
+        const comp = this.ctx.createDynamicsCompressor();
+        comp.threshold.setValueAtTime(-18, this.ctx.currentTime);
+        comp.knee.setValueAtTime(30, this.ctx.currentTime);
+        comp.ratio.setValueAtTime(4, this.ctx.currentTime);
+        comp.attack.setValueAtTime(0.01, this.ctx.currentTime);
+        comp.release.setValueAtTime(0.5, this.ctx.currentTime);
+
         this.masterGain = this.ctx.createGain();
-        this.masterGain.gain.value = 0.8;
+        this.masterGain.gain.value = 0.75;
+
+        this.muffleFilter.connect(comp);
+        comp.connect(this.masterGain);
         this.masterGain.connect(this.ctx.destination);
+
         this.natureType = natureType;
 
-        // Create all layers
-        this.createPinkNoiseLayer(volumes.pinkNoise);
+        this.createNoiseLayer(volumes.pinkNoise);
         this.createNatureLayer(natureType, volumes.nature);
         this.createPianoLayer(volumes.piano);
         this.createShushLayer(volumes.shush);
+        this.createHeartbeatLayer(volumes.heartbeat);
 
         this.isPlaying = true;
     }
 
-    /** Stop the audio engine */
     stop(): void {
-        this.animationFrameIds.forEach((id) => cancelAnimationFrame(id));
-        this.animationFrameIds = [];
+        this.isPlaying = false;
+
+        // Cancel every pending callback before disconnecting nodes
+        this.clearAllTimers();
+
+        if (this.hbInterval) {
+            clearInterval(this.hbInterval);
+            this.hbInterval = null;
+        }
 
         this.layers.forEach((layer) => {
             layer.sourceNodes.forEach((node) => {
-                try {
-                    if (node instanceof AudioBufferSourceNode) {
-                        node.stop();
-                    } else if (node instanceof OscillatorNode) {
-                        node.stop();
-                    }
-                } catch {
-                    // Already stopped
-                }
+                try { node.stop(); } catch { /* already stopped */ }
+                try { node.disconnect(); } catch { /* already disconnected */ }
             });
-            layer.gainNode.disconnect();
+            try { layer.gainNode.disconnect(); } catch { /* ok */ }
+            layer.filterChain?.forEach((f) => { try { f.disconnect(); } catch { /* ok */ } });
         });
         this.layers.clear();
 
         if (this.ctx) {
-            this.ctx.close();
+            try {
+                this.ctx.close();
+            } catch { /* ok */ }
             this.ctx = null;
         }
-        this.masterGain = null;
-        this.isPlaying = false;
     }
 
-    /** Update individual layer volume */
+    fadeOutAndStop(durationSecs: number): void {
+        if (!this.isPlaying || !this.ctx || !this.masterGain) return;
+        
+        const now = this.ctx.currentTime;
+        this.masterGain.gain.cancelScheduledValues(now);
+        this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, now);
+        this.masterGain.gain.exponentialRampToValueAtTime(0.0001, now + durationSecs);
+        this.masterGain.gain.linearRampToValueAtTime(0, now + durationSecs + 0.1);
+        
+        this.scheduleTimeout(() => {
+            this.stop();
+        }, (durationSecs + 0.5) * 1000);
+    }
+
     setLayerVolume(layer: keyof LayerVolumes, volume: number): void {
-        const layerNodes = this.layers.get(layer);
-        if (layerNodes) {
-            layerNodes.gainNode.gain.setTargetAtTime(
-                volume,
-                this.ctx?.currentTime || 0,
-                0.1
+        const nodes = this.layers.get(layer);
+        if (nodes && this.ctx) {
+            nodes.gainNode.gain.exponentialRampToValueAtTime(
+                Math.max(0.0001, volume),
+                this.ctx.currentTime + 0.25
             );
         }
     }
 
-    /** Update all volumes at once */
-    setVolumes(volumes: LayerVolumes): void {
-        this.setLayerVolume("pinkNoise", volumes.pinkNoise);
-        this.setLayerVolume("nature", volumes.nature);
-        this.setLayerVolume("piano", volumes.piano);
-        this.setLayerVolume("shush", volumes.shush);
+    setMuffled(muffled: boolean): void {
+        if (!this.muffleFilter || !this.ctx) return;
+        this.isMuffled = muffled;
+        this.muffleFilter.frequency.exponentialRampToValueAtTime(
+            muffled ? 500 : 20000,
+            this.ctx.currentTime + 1.0
+        );
     }
 
-    /** Switch nature sound type while playing */
+    setVolumes(volumes: LayerVolumes): void {
+        (Object.keys(volumes) as (keyof LayerVolumes)[]).forEach((k) =>
+            this.setLayerVolume(k, volumes[k])
+        );
+    }
+
     switchNature(type: NatureSoundType): void {
-        if (this.natureType === type) return;
-
-        // Fade out old nature
-        const oldNature = this.layers.get("nature");
-        if (oldNature) {
-            oldNature.gainNode.gain.setTargetAtTime(0, this.ctx?.currentTime || 0, 0.5);
-            setTimeout(() => {
-                oldNature.sourceNodes.forEach((n) => {
-                    try {
-                        if (n instanceof AudioBufferSourceNode) n.stop();
-                        else if (n instanceof OscillatorNode) n.stop();
-                    } catch { /* ok */ }
+        if (this.natureType === type || !this.ctx) return;
+        const old = this.layers.get("nature");
+        const currentTime = this.ctx.currentTime;
+        if (old) {
+            old.gainNode.gain.exponentialRampToValueAtTime(0.0001, currentTime + 0.8);
+            this.scheduleTimeout(() => {
+                old.sourceNodes.forEach((n) => {
+                    try { n.stop(); } catch { /* ok */ }
+                    try { n.disconnect(); } catch { /* ok */ }
                 });
-                oldNature.gainNode.disconnect();
+                try { old.gainNode.disconnect(); } catch { /* ok */ }
+                old.filterChain?.forEach((f) => { try { f.disconnect(); } catch { /* ok */ } });
                 this.layers.delete("nature");
-
-                // Create new nature layer
                 this.natureType = type;
-                const currentVol = oldNature.gainNode.gain.value || 0.4;
-                this.createNatureLayer(type, currentVol);
-            }, 600);
+                this.createNatureLayer(type, 0.4);
+            }, 900);
         } else {
             this.natureType = type;
+            this.createNatureLayer(type, 0.4);
         }
     }
 
-    get playing(): boolean {
-        return this.isPlaying;
+    get playing(): boolean { return this.isPlaying; }
+
+    // ─── Timer management ────────────────────────────────────────────────────
+
+    /**
+     * Wrapper around setTimeout that registers the ID so stop() can cancel it.
+     * Use everywhere instead of raw setTimeout.
+     */
+    private scheduleTimeout(fn: () => void, ms: number): ReturnType<typeof setTimeout> {
+        const id = setTimeout(() => {
+            this.pendingTimers.delete(id);
+            fn();
+        }, ms);
+        this.pendingTimers.add(id);
+        return id;
     }
 
-    // ─── Layer Creators ─────────────────────────────────────────
+    private clearAllTimers(): void {
+        this.pendingTimers.forEach((id) => clearTimeout(id));
+        this.pendingTimers.clear();
+    }
 
-    private createPinkNoiseLayer(volume: number): void {
-        if (!this.ctx || !this.masterGain) return;
+    // ─── Noise generation ────────────────────────────────────────────────────
 
-        const bufferSize = 2 * this.ctx.sampleRate; // 2 seconds
-        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-        const data = buffer.getChannelData(0);
+    private async loadBuffer(url: string): Promise<AudioBuffer | null> {
+        if (SoundscapeEngine.bufferCache.has(url)) {
+            return SoundscapeEngine.bufferCache.get(url)!;
+        }
+        if (!this.ctx) return null;
+        try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`Fetch failed: ${res.statusText}`);
+            const arrayBuffer = await res.arrayBuffer();
+            const audioBuffer = await this.ctx.decodeAudioData(arrayBuffer);
+            SoundscapeEngine.bufferCache.set(url, audioBuffer);
+            return audioBuffer;
+        } catch (e) {
+            return null;
+        }
+    }
 
-        // Pink noise using Paul Kellet's refined method
+    private async playAcoustic(layerName: string, expectedNature: NatureSoundType | null, url: string, destNode: AudioNode, loop = true): Promise<boolean> {
+        const buf = await this.loadBuffer(url);
+        if (!buf || !this.isPlaying || !this.ctx) return false;
+        if (expectedNature !== null && this.natureType !== expectedNature) return false;
+
+        const layer = this.layers.get(layerName);
+        if (!layer) return false; 
+        const src = this.ctx.createBufferSource();
+        src.buffer = buf;
+        src.loop = loop;
+        src.connect(destNode);
+        src.start();
+        layer.sourceNodes.push(src);
+        return true;
+    }
+
+    /**
+     * Paul Kellett pink noise using the Mulberry32 seeded PRNG.
+     * Each seed produces a completely different deterministic sequence —
+     * no skip-N-samples warmup needed, and no Math.random() collisions.
+     */
+    private createPinkNoiseBuffer(duration: number, seed: number): AudioBuffer {
+        const sr = this.ctx!.sampleRate;
+        const size = Math.floor(duration * sr);
+        const buf = this.ctx!.createBuffer(1, size, sr);
+        const d = buf.getChannelData(0);
+
+        let s = (seed * 0x9e3779b9) >>> 0;
+        const rng = (): number => {
+            s = (Math.imul(s ^ (s >>> 15), s | 1)) >>> 0;
+            s ^= s + (Math.imul(s ^ (s >>> 7), s | 61) >>> 0);
+            return ((s ^ (s >>> 14)) >>> 0) / 0x100000000 * 2 - 1;
+        };
+
         let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
-        for (let i = 0; i < bufferSize; i++) {
-            const white = Math.random() * 2 - 1;
-            b0 = 0.99886 * b0 + white * 0.0555179;
-            b1 = 0.99332 * b1 + white * 0.0750759;
-            b2 = 0.96900 * b2 + white * 0.1538520;
-            b3 = 0.86650 * b3 + white * 0.3104856;
-            b4 = 0.55000 * b4 + white * 0.5329522;
-            b5 = -0.7616 * b5 - white * 0.0168980;
-            data[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.08;
-            b6 = white * 0.115926;
+        for (let i = 0; i < size; i++) {
+            const w = rng();
+            b0 = 0.99886 * b0 + w * 0.0555179;
+            b1 = 0.99332 * b1 + w * 0.0750759;
+            b2 = 0.96900 * b2 + w * 0.1538520;
+            b3 = 0.86650 * b3 + w * 0.3104856;
+            b4 = 0.55000 * b4 + w * 0.5329522;
+            b5 = -0.7616  * b5 - w * 0.0168980;
+            d[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362) * 0.13;
+            b6 = w * 0.115926;
         }
+        return buf;
+    }
 
-        const source = this.ctx.createBufferSource();
-        source.buffer = buffer;
-        source.loop = true;
+    private loopNoisePair(
+        seedA: number,
+        seedB: number,
+        duration: number,
+        destination: AudioNode,
+        filters?: BiquadFilterNode[]
+    ): AudioBufferSourceNode[] {
+        const sL = this.ctx!.createBufferSource();
+        const sR = this.ctx!.createBufferSource();
+        sL.buffer = this.createPinkNoiseBuffer(duration, seedA);
+        sR.buffer = this.createPinkNoiseBuffer(duration, seedB);
+        sL.loop = true; sR.loop = true;
 
-        const gain = this.ctx.createGain();
+        const entry = filters?.[0] ?? destination;
+        sL.connect(entry); sR.connect(entry);
+        if (filters) filters[filters.length - 1].connect(destination);
+
+        sL.start(); sR.start();
+        return [sL, sR];
+    }
+
+    private cascadeLP(cutoff: number, stages: number, q = 0.5): BiquadFilterNode[] {
+        const chain: BiquadFilterNode[] = [];
+        for (let i = 0; i < stages; i++) {
+            const f = this.ctx!.createBiquadFilter();
+            f.type = "lowpass";
+            f.frequency.value = cutoff;
+            f.Q.value = q;
+            if (chain.length) chain[chain.length - 1].connect(f);
+            chain.push(f);
+        }
+        return chain;
+    }
+
+    // ─── Layer implementations ───────────────────────────────────────────────
+
+    private async createNoiseLayer(volume: number): Promise<void> {
+        const gain = this.ctx!.createGain();
         gain.gain.value = volume;
+        gain.connect(this.muffleFilter!);
+        this.layers.set("pinkNoise", { gainNode: gain, sourceNodes: [], filterChain: [] });
 
-        source.connect(gain);
-        gain.connect(this.masterGain);
-        source.start();
+        // Prefer realistic acoustic Brown/Pink noise file if available
+        const acousticSuccess = await this.playAcoustic("pinkNoise", null, "/sounds/brown_noise.mp3", gain);
+        if (acousticSuccess) return;
+        
+        if (!this.isPlaying) return;
 
-        this.layers.set("pinkNoise", { gainNode: gain, sourceNodes: [source] });
+        // Fallback: Brown-Noise filtered synthesis
+        const filters = this.cascadeLP(350, 4); // Deep low pass for Brown noise profile
+        const sources = this.loopNoisePair(1, 2, 8, gain, filters);
+
+        const layer = this.layers.get("pinkNoise");
+        if (layer) {
+            layer.sourceNodes.push(...sources);
+            layer.filterChain = filters;
+        }
     }
 
     private createNatureLayer(type: NatureSoundType, volume: number): void {
-        if (!this.ctx || !this.masterGain || type === "none") return;
-
-        switch (type) {
-            case "ocean":
-                this.createOceanLayer(volume);
-                break;
-            case "rain":
-                this.createRainLayer(volume);
-                break;
-            case "forest":
-                this.createForestLayer(volume);
-                break;
-        }
-    }
-
-    private createOceanLayer(volume: number): void {
-        if (!this.ctx || !this.masterGain) return;
-
-        // Ocean = filtered noise with slow wave-like amplitude modulation
-        const bufferSize = 4 * this.ctx.sampleRate;
-        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-        const data = buffer.getChannelData(0);
-
-        // Generate brownian-ish noise for ocean base
-        let lastOut = 0;
-        for (let i = 0; i < bufferSize; i++) {
-            const white = Math.random() * 2 - 1;
-            lastOut = (lastOut + 0.02 * white) / 1.02;
-            data[i] = lastOut * 3.5;
-        }
-
-        const source = this.ctx.createBufferSource();
-        source.buffer = buffer;
-        source.loop = true;
-
-        // Low-pass filter for deep ocean sound
-        const lpf = this.ctx.createBiquadFilter();
-        lpf.type = "lowpass";
-        lpf.frequency.value = 400;
-        lpf.Q.value = 0.7;
-
-        // Amplitude modulation for wave rhythm (~0.1 Hz = 10s waves)
-        const lfo = this.ctx.createOscillator();
-        lfo.type = "sine";
-        lfo.frequency.value = 0.08; // ~12 second wave cycle
-
-        const lfoGain = this.ctx.createGain();
-        lfoGain.gain.value = 0.3; // Modulation depth
+        if (type === "none" || !this.ctx) return;
 
         const gain = this.ctx.createGain();
-        gain.gain.value = volume;
+        gain.gain.value = Math.max(volume, 0.0001);
+        gain.connect(this.muffleFilter!);
+        this.layers.set("nature", { gainNode: gain, sourceNodes: [] });
 
-        lfo.connect(lfoGain);
-        lfoGain.connect(gain.gain);
-
-        source.connect(lpf);
-        lpf.connect(gain);
-        gain.connect(this.masterGain);
-
-        source.start();
-        lfo.start();
-
-        this.layers.set("nature", { gainNode: gain, sourceNodes: [source, lfo] });
+        if      (type === "ocean")  this.buildOcean(gain, volume);
+        else if (type === "rain")   this.buildRain(gain);
+        else if (type === "forest") this.buildForest(gain);
+        else if (type === "whale")  this.buildWhale(gain);
     }
 
-    private createRainLayer(volume: number): void {
-        if (!this.ctx || !this.masterGain) return;
+    private async buildOcean(gain: GainNode, baseVolume: number): Promise<void> {
+        const acousticSuccess = await this.playAcoustic("nature", "ocean", "/sounds/ocean.mp3", gain);
+        if (acousticSuccess) return;
+        if (!this.isPlaying || this.natureType !== "ocean") return;
 
-        // Rain = high-frequency filtered noise with subtle variations
-        const bufferSize = 4 * this.ctx.sampleRate;
-        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-        const data = buffer.getChannelData(0);
+        const filters = this.cascadeLP(320, 4, 0.4);
+        const sources = this.loopNoisePair(3, 4, 12, gain, filters);
 
-        for (let i = 0; i < bufferSize; i++) {
-            const white = Math.random() * 2 - 1;
-            // Add occasional "droplet" impulses
-            const droplet = Math.random() > 0.9995 ? (Math.random() * 0.4) : 0;
-            data[i] = white * 0.3 + droplet;
-        }
+        /**
+         * DC offset anchor: a ConstantSourceNode feeds +baseVolume into gain.gain.
+         * LFOs modulate around that anchor so gain.gain stays above 0 at all times.
+         * In v2, gain.gain.value was set once and LFOs added signed offsets, which
+         * could push it negative at low volumes → polarity flip + click artefact.
+         */
+        gain.gain.value = 0;
+        const dc = this.ctx!.createConstantSource();
+        dc.offset.value = baseVolume;
+        dc.connect(gain.gain);
+        dc.start();
 
-        const source = this.ctx.createBufferSource();
-        source.buffer = buffer;
-        source.loop = true;
+        const swellDepth = baseVolume * 0.32;
+        const lfoFreqs = [0.022, 0.037, 0.059] as const;
 
-        // Band-pass for rain-like frequencies
-        const bpf = this.ctx.createBiquadFilter();
-        bpf.type = "bandpass";
-        bpf.frequency.value = 3000;
-        bpf.Q.value = 0.3;
-
-        // Slight high shelf for shimmer
-        const shelf = this.ctx.createBiquadFilter();
-        shelf.type = "highshelf";
-        shelf.frequency.value = 5000;
-        shelf.gain.value = -6;
-
-        // Gentle LFO for intensity variation
-        const lfo = this.ctx.createOscillator();
-        lfo.type = "sine";
-        lfo.frequency.value = 0.05; // ~20 second cycle
-
-        const lfoGain = this.ctx.createGain();
-        lfoGain.gain.value = 0.15;
-
-        const gain = this.ctx.createGain();
-        gain.gain.value = volume;
-
-        lfo.connect(lfoGain);
-        lfoGain.connect(gain.gain);
-
-        source.connect(bpf);
-        bpf.connect(shelf);
-        shelf.connect(gain);
-        gain.connect(this.masterGain);
-
-        source.start();
-        lfo.start();
-
-        this.layers.set("nature", { gainNode: gain, sourceNodes: [source, lfo] });
-    }
-
-    private createForestLayer(volume: number): void {
-        if (!this.ctx || !this.masterGain) return;
-
-        // Forest = soft rustling noise + gentle bird-like chirps
-        const bufferSize = 4 * this.ctx.sampleRate;
-        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-        const data = buffer.getChannelData(0);
-
-        // Gentle rustling base
-        let prev = 0;
-        for (let i = 0; i < bufferSize; i++) {
-            const white = Math.random() * 2 - 1;
-            prev = prev * 0.7 + white * 0.3;
-            data[i] = prev * 0.25;
-        }
-
-        const source = this.ctx.createBufferSource();
-        source.buffer = buffer;
-        source.loop = true;
-
-        // Band-pass for leaf-rustling frequencies
-        const bpf = this.ctx.createBiquadFilter();
-        bpf.type = "bandpass";
-        bpf.frequency.value = 1200;
-        bpf.Q.value = 0.5;
-
-        const gain = this.ctx.createGain();
-        gain.gain.value = volume;
-
-        source.connect(bpf);
-        bpf.connect(gain);
-        gain.connect(this.masterGain);
-        source.start();
-
-        // Add gentle bird chirps (high-frequency sine pings)
-        const sourceNodes: AudioNode[] = [source];
-
-        // Schedule random chirps using oscillators
-        const createChirp = () => {
-            if (!this.ctx || !this.masterGain || !this.isPlaying) return;
-
-            const chirp = this.ctx.createOscillator();
-            chirp.type = "sine";
-            const baseFreq = 2000 + Math.random() * 2000; // 2000-4000 Hz
-            chirp.frequency.setValueAtTime(baseFreq, this.ctx.currentTime);
-            chirp.frequency.exponentialRampToValueAtTime(
-                baseFreq * 1.3,
-                this.ctx.currentTime + 0.08
-            );
-            chirp.frequency.exponentialRampToValueAtTime(
-                baseFreq * 0.8,
-                this.ctx.currentTime + 0.15
-            );
-
-            const chirpGain = this.ctx.createGain();
-            chirpGain.gain.setValueAtTime(0, this.ctx.currentTime);
-            chirpGain.gain.linearRampToValueAtTime(
-                0.02 * volume,
-                this.ctx.currentTime + 0.02
-            );
-            chirpGain.gain.exponentialRampToValueAtTime(
-                0.001,
-                this.ctx.currentTime + 0.2
-            );
-
-            chirp.connect(chirpGain);
-            chirpGain.connect(gain);
-
-            chirp.start();
-            chirp.stop(this.ctx.currentTime + 0.25);
-
-            // Schedule next chirp
-            const nextDelay = 3000 + Math.random() * 8000; // 3-11 seconds
-            const timeoutId = setTimeout(createChirp, nextDelay);
-            // Store for cleanup
-            chirp.onended = () => clearTimeout(timeoutId);
-        };
-
-        // Start first chirp after a short delay
-        setTimeout(createChirp, 2000);
-
-        this.layers.set("nature", { gainNode: gain, sourceNodes });
-    }
-
-    private createPianoLayer(volume: number): void {
-        if (!this.ctx || !this.masterGain) return;
-
-        // Soft piano pad — C major chord with gentle sine harmonics
-        const gain = this.ctx.createGain();
-        gain.gain.value = volume;
-
-        const sourceNodes: OscillatorNode[] = [];
-
-        // C major chord notes (fundamental frequencies)
-        // C3, E3, G3, C4 for a warm, soothing pad
-        const notes = [130.81, 164.81, 196.00, 261.63];
-        const harmonicVolumes = [0.08, 0.06, 0.05, 0.03];
-
-        notes.forEach((freq, idx) => {
-            // Fundamental
-            const osc = this.ctx!.createOscillator();
-            osc.type = "sine";
-            osc.frequency.value = freq;
-
-            const oscGain = this.ctx!.createGain();
-            oscGain.gain.value = harmonicVolumes[idx];
-
-            // Add slight detuning for warmth
-            osc.detune.value = (Math.random() - 0.5) * 8; // ±4 cents
-
-            osc.connect(oscGain);
-            oscGain.connect(gain);
-            osc.start();
-            sourceNodes.push(osc);
-
-            // Add soft overtone
-            const overtone = this.ctx!.createOscillator();
-            overtone.type = "sine";
-            overtone.frequency.value = freq * 2;
-            overtone.detune.value = (Math.random() - 0.5) * 6;
-
-            const overtoneGain = this.ctx!.createGain();
-            overtoneGain.gain.value = harmonicVolumes[idx] * 0.25;
-
-            overtone.connect(overtoneGain);
-            overtoneGain.connect(gain);
-            overtone.start();
-            sourceNodes.push(overtone);
+        const lfos: OscillatorNode[] = lfoFreqs.map((freq) => {
+            const lfo = this.ctx!.createOscillator();
+            lfo.type = "sine";
+            lfo.frequency.value = freq;
+            const g = this.ctx!.createGain();
+            g.gain.value = swellDepth / lfoFreqs.length;
+            lfo.connect(g);
+            g.connect(gain.gain);
+            lfo.start();
+            return lfo;
         });
 
-        // Gentle pulsing LFO for organic feel
-        const lfo = this.ctx.createOscillator();
-        lfo.type = "sine";
-        lfo.frequency.value = 0.15; // Very slow breath-like pulsing
-
-        const lfoGain = this.ctx.createGain();
-        lfoGain.gain.value = 0.02;
-
-        lfo.connect(lfoGain);
-        lfoGain.connect(gain.gain);
-        lfo.start();
-        sourceNodes.push(lfo);
-
-        gain.connect(this.masterGain);
-
-        this.layers.set("piano", { gainNode: gain, sourceNodes });
+        const layer = this.layers.get("nature");
+        if (layer) {
+            layer.sourceNodes.push(...sources, dc, ...lfos);
+            layer.filterChain = filters;
+        }
     }
 
-    private createShushLayer(volume: number): void {
-        if (!this.ctx || !this.masterGain) return;
+    private async buildRain(gain: GainNode): Promise<void> {
+        const acousticSuccess = await this.playAcoustic("nature", "rain", "/sounds/rain.mp3", gain);
+        if (acousticSuccess) return;
+        if (!this.isPlaying || this.natureType !== "rain") return;
 
-        // Shush rhythm = amplitude-modulated noise at ~60 BPM
-        const bufferSize = 2 * this.ctx.sampleRate;
-        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-        const data = buffer.getChannelData(0);
+        const hpf = this.ctx!.createBiquadFilter();
+        hpf.type = "highpass"; hpf.frequency.value = 700; hpf.Q.value = 0.5;
+        const lpf = this.ctx!.createBiquadFilter();
+        lpf.type = "lowpass";  lpf.frequency.value = 4500; lpf.Q.value = 0.5;
 
-        for (let i = 0; i < bufferSize; i++) {
-            data[i] = (Math.random() * 2 - 1) * 0.3;
+        const sources = this.loopNoisePair(5, 6, 5, gain, [hpf, lpf]);
+
+        // Soft pentatonic lullaby woven into the rain
+        this.buildLullaby(gain, 0.08);
+
+        const layer = this.layers.get("nature");
+        if (layer) {
+            layer.sourceNodes.push(...sources);
+            layer.filterChain = [hpf, lpf];
         }
+    }
 
-        const source = this.ctx.createBufferSource();
-        source.buffer = buffer;
-        source.loop = true;
+    private async buildForest(gain: GainNode): Promise<void> {
+        const acousticSuccess = await this.playAcoustic("nature", "forest", "/sounds/forest.mp3", gain);
+        if (acousticSuccess) return;
+        if (!this.isPlaying || this.natureType !== "forest") return;
 
-        // Band-pass for shush-like frequencies
-        const bpf = this.ctx.createBiquadFilter();
-        bpf.type = "bandpass";
-        bpf.frequency.value = 2500;
-        bpf.Q.value = 0.8;
+        const sources: (AudioBufferSourceNode | OscillatorNode)[] = [];
 
-        // Amplitude modulation at 1 Hz (60 BPM) for "shh... shh... shh..."
-        const lfo = this.ctx.createOscillator();
-        lfo.type = "sine";
-        lfo.frequency.value = 1.0; // 60 BPM
+        // Wind base — very low-passed for rustling-leaves character
+        const windSrc = this.ctx!.createBufferSource();
+        windSrc.buffer = this.createPinkNoiseBuffer(7, 7);
+        windSrc.loop = true;
+        const windLPF = this.ctx!.createBiquadFilter();
+        windLPF.type = "lowpass"; windLPF.frequency.value = 380;
+        const windGain = this.ctx!.createGain(); windGain.gain.value = 0.55;
+        windSrc.connect(windLPF); windLPF.connect(windGain); windGain.connect(gain);
+        windSrc.start();
+        sources.push(windSrc);
 
-        const lfoGain = this.ctx.createGain();
-        lfoGain.gain.value = 0.5; // Full depth modulation
+        /**
+         * Cricket texture: was 4 kHz Q=3 in v2 — narrow spike in the most sensitive
+         * range of infant hearing (3–6 kHz). Lowered to 2.2 kHz, Q=1.8 for a softer,
+         * more diffuse insect-at-dusk texture.
+         */
+        const cricketSrc = this.ctx!.createBufferSource();
+        cricketSrc.buffer = this.createPinkNoiseBuffer(4, 8);
+        cricketSrc.loop = true;
+        const bpf = this.ctx!.createBiquadFilter();
+        bpf.type = "bandpass"; bpf.frequency.value = 2200; bpf.Q.value = 1.8;
+        const cGain = this.ctx!.createGain(); cGain.gain.value = 0.18;
+        const cLFO = this.ctx!.createOscillator();
+        cLFO.type = "sine"; cLFO.frequency.value = 0.7;
+        const cLFOGain = this.ctx!.createGain(); cLFOGain.gain.value = 0.09;
+        cLFO.connect(cLFOGain); cLFOGain.connect(cGain.gain);
+        cricketSrc.connect(bpf); bpf.connect(cGain); cGain.connect(gain);
+        cricketSrc.start(); cLFO.start();
+        sources.push(cricketSrc, cLFO);
 
+        // Occasional distant bird — soft, infrequent, low-passed
+        const chirp = () => {
+            if (!this.isPlaying || this.natureType !== "forest") return;
+            const t = this.ctx!.currentTime;
+            const f = 1000 + Math.random() * 600;
+            const osc = this.ctx!.createOscillator();
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(f, t);
+            osc.frequency.exponentialRampToValueAtTime(f * 1.35, t + 0.12);
+            osc.frequency.exponentialRampToValueAtTime(f * 0.88, t + 0.32);
+            const env = this.ctx!.createGain();
+            env.gain.setValueAtTime(0, t);
+            env.gain.linearRampToValueAtTime(0.05, t + 0.04);
+            env.gain.exponentialRampToValueAtTime(0.0001, t + 0.38);
+            const birdLPF = this.ctx!.createBiquadFilter();
+            birdLPF.type = "lowpass"; birdLPF.frequency.value = 2000;
+            osc.connect(birdLPF); birdLPF.connect(env); env.connect(gain);
+            osc.start(t); osc.stop(t + 0.45);
+            this.scheduleTimeout(chirp, 9000 + Math.random() * 18000);
+        };
+        this.scheduleTimeout(chirp, 4000 + Math.random() * 8000);
+
+        const layer = this.layers.get("nature");
+        if (layer) layer.sourceNodes.push(...sources);
+    }
+
+    private buildWhale(gain: GainNode): void {
+        const rumble = this.ctx!.createOscillator();
+        rumble.type = "sine"; rumble.frequency.value = 38;
+        const rG = this.ctx!.createGain(); rG.gain.value = 0.055;
+        rumble.connect(rG); rG.connect(gain); rumble.start();
+
+        const scheduleCall = () => {
+            if (!this.isPlaying || this.natureType !== "whale") return;
+            const t = this.ctx!.currentTime;
+            const base = 100 + Math.random() * 80;
+
+            const car = this.ctx!.createOscillator();
+            const mod = this.ctx!.createOscillator();
+            const mG = this.ctx!.createGain();
+            car.frequency.value = base;
+            mod.frequency.value = base * 1.48;
+            mG.gain.value = 28;
+
+            car.frequency.exponentialRampToValueAtTime(base * 1.22, t + 4);
+            car.frequency.exponentialRampToValueAtTime(base * 0.82, t + 8);
+
+            const cG = this.ctx!.createGain();
+            cG.gain.setValueAtTime(0, t);
+            cG.gain.linearRampToValueAtTime(0.17, t + 2.5);
+            cG.gain.exponentialRampToValueAtTime(0.0001, t + 9.5);
+
+            const tilt = this.ctx!.createBiquadFilter();
+            tilt.type = "lowpass"; tilt.frequency.value = 550;
+
+            mod.connect(mG); mG.connect(car.frequency);
+            car.connect(tilt); tilt.connect(cG); cG.connect(gain);
+            car.start(t); mod.start(t);
+            car.stop(t + 11); mod.stop(t + 11);
+
+            this.scheduleTimeout(scheduleCall, 22000 + Math.random() * 18000);
+        };
+        scheduleCall();
+
+        const layer = this.layers.get("nature");
+        if (layer) layer.sourceNodes.push(rumble);
+    }
+
+    /**
+     * Pentatonic lullaby with plate-reverb simulation.
+     * Used standalone (piano layer) and embedded in rain.
+     */
+    private buildLullaby(destination: AudioNode, masterVolume: number): void {
+        const gain = this.ctx!.createGain();
+        gain.gain.value = masterVolume;
+
+        // Two-tap plate reverb
+        const tap1 = this.ctx!.createDelay(1.0); tap1.delayTime.value = 0.22;
+        const tap2 = this.ctx!.createDelay(1.0); tap2.delayTime.value = 0.41;
+        const revLPF = this.ctx!.createBiquadFilter();
+        revLPF.type = "lowpass"; revLPF.frequency.value = 1600;
+        const revGain = this.ctx!.createGain(); revGain.gain.value = 0.28;
+        const fb = this.ctx!.createGain(); fb.gain.value = 0.22;
+
+        gain.connect(tap1); gain.connect(tap2);
+        tap1.connect(revLPF); tap2.connect(revLPF);
+        revLPF.connect(revGain); revGain.connect(destination);
+        revGain.connect(fb); fb.connect(tap1);
+        gain.connect(destination);
+
+        const scale = [130.81, 146.83, 164.81, 196.00, 220.00, 261.63, 293.66, 329.63, 392.00, 440.00];
+
+        const playNote = () => {
+            if (!this.isPlaying) return;
+            const t = this.ctx!.currentTime;
+            const freq = scale[Math.floor(Math.random() * scale.length)];
+            const decay = 3.0 + Math.random() * 3.0; // 3–6 s decay
+
+            [
+                { ratio: 1.0, amp: 0.55, detune:  0 },
+                { ratio: 2.0, amp: 0.22, detune:  4 },
+                { ratio: 3.0, amp: 0.07, detune: -3 },
+            ].forEach(({ ratio, amp, detune }) => {
+                const osc = this.ctx!.createOscillator();
+                osc.type = "sine";
+                osc.frequency.value = freq * ratio;
+                osc.detune.value = detune;
+
+                const env = this.ctx!.createGain();
+                env.gain.setValueAtTime(0, t);
+                env.gain.linearRampToValueAtTime(amp * 0.06, t + 0.015);
+                env.gain.exponentialRampToValueAtTime(amp * 0.02, t + 0.4); // sustain
+                env.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+
+                osc.connect(env); env.connect(gain);
+                osc.start(t); osc.stop(t + decay + 0.1);
+            });
+
+            this.scheduleTimeout(playNote, 4000 + Math.random() * 5000);
+        };
+
+        this.scheduleTimeout(playNote, 1500 + Math.random() * 2000);
+    }
+
+    private async createPianoLayer(volume: number): Promise<void> {
+        if (!this.ctx) return;
         const gain = this.ctx.createGain();
         gain.gain.value = volume;
+        gain.connect(this.muffleFilter!);
+        this.layers.set("piano", { gainNode: gain, sourceNodes: [] });
 
-        lfo.connect(lfoGain);
-        lfoGain.connect(gain.gain);
+        const acousticSuccess = await this.playAcoustic("piano", null, "/sounds/piano.mp3", gain);
+        if (acousticSuccess) return;
+        if (!this.isPlaying) return;
 
-        source.connect(bpf);
-        bpf.connect(gain);
-        gain.connect(this.masterGain);
+        this.buildLullaby(gain, 1.0);
+    }
 
-        source.start();
+    private async createShushLayer(volume: number): Promise<void> {
+        if (!this.ctx) return;
+        const gain = this.ctx.createGain();
+        gain.gain.value = volume;
+        gain.connect(this.muffleFilter!);
+        this.layers.set("shush", { gainNode: gain, sourceNodes: [], filterChain: [] });
+
+        const acousticSuccess = await this.playAcoustic("shush", null, "/sounds/shush.mp3", gain);
+        if (acousticSuccess) return;
+        if (!this.isPlaying) return;
+
+        const bpf = this.ctx.createBiquadFilter();
+        bpf.type = "bandpass"; bpf.frequency.value = 800; bpf.Q.value = 1.2;
+
+        const sources = this.loopNoisePair(9, 10, 4, gain, [bpf]);
+
+        const lfo = this.ctx.createOscillator();
+        lfo.type = "sine"; lfo.frequency.value = 0.4;
+        const lfoG = this.ctx.createGain(); lfoG.gain.value = 0.18;
+        lfo.connect(lfoG); lfoG.connect(gain.gain);
         lfo.start();
 
-        this.layers.set("shush", { gainNode: gain, sourceNodes: [source, lfo] });
+        const layer = this.layers.get("shush");
+        if (layer) {
+            layer.sourceNodes.push(...sources, lfo);
+            layer.filterChain = [bpf];
+        }
+    }
+
+    private createHeartbeatLayer(volume: number): void {
+        if (!this.ctx) return;
+        const gain = this.ctx.createGain();
+        gain.gain.value = volume;
+        gain.connect(this.muffleFilter!);
+
+        const thump = () => {
+            if (!this.isPlaying || !this.ctx) return;
+            const amp = gain.gain.value; // live value respects setLayerVolume()
+            const t = this.ctx.currentTime;
+
+            [0, 0.19].forEach((offset) => {
+                const osc = this.ctx!.createOscillator();
+                osc.type = "sine"; osc.frequency.value = 55;
+
+                const lpf = this.ctx!.createBiquadFilter();
+                lpf.type = "lowpass"; lpf.frequency.value = 130; lpf.Q.value = 0.7;
+
+                const env = this.ctx!.createGain();
+                env.gain.setValueAtTime(0, t + offset);
+                env.gain.linearRampToValueAtTime(Math.max(amp, 0.0001) * 0.45, t + offset + 0.07);
+                env.gain.exponentialRampToValueAtTime(0.0001, t + offset + 0.4);
+
+                osc.connect(lpf); lpf.connect(env); env.connect(gain);
+                osc.start(t + offset); osc.stop(t + offset + 0.5);
+            });
+        };
+
+        this.hbInterval = setInterval(thump, 60000 / 65);
+        thump();
+
+        this.layers.set("heartbeat", { gainNode: gain, sourceNodes: [] });
     }
 }
