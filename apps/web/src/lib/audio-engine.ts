@@ -17,7 +17,7 @@
  * - createPinkNoiseBuffer() takes an explicit seed integer instead of a skip-N-samples loop.
  */
 
-export type NatureSoundType = "ocean" | "rain" | "forest" | "whale" | "none";
+export type NatureSoundType = "ocean" | "rain" | "forest" | "whale" | "crickets" | "none";
 
 export interface LayerVolumes {
     pinkNoise: number;
@@ -341,6 +341,7 @@ export class SoundscapeEngine {
         else if (type === "rain")   this.buildRain(gain);
         else if (type === "forest") this.buildForest(gain);
         else if (type === "whale")  this.buildWhale(gain);
+        else if (type === "crickets") this.buildCrickets(gain);
     }
 
     private async buildOcean(gain: GainNode, baseVolume: number): Promise<void> {
@@ -468,6 +469,15 @@ export class SoundscapeEngine {
 
         const layer = this.layers.get("nature");
         if (layer) layer.sourceNodes.push(...sources);
+    }
+
+    private async buildCrickets(gain: GainNode): Promise<void> {
+        const acousticSuccess = await this.playAcoustic("nature", "crickets", "/sounds/crickets.mp3", gain);
+        if (acousticSuccess) return;
+        if (!this.isPlaying || this.natureType !== "crickets") return;
+        
+        // Fallback to procedural forest crickets if file missing
+        this.buildForest(gain);
     }
 
     private buildWhale(gain: GainNode): void {

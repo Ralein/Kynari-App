@@ -31,6 +31,7 @@ import {
     Loader2,
     Fish,
     Activity,
+    Bug,
 } from "lucide-react";
 import { ProfileSelector } from "@/components/soundscape/ProfileSelector";
 import { LayerMixer } from "@/components/soundscape/LayerMixer";
@@ -55,6 +56,7 @@ const NATURE_SOUNDS = [
     { id: "rain", name: "Rain", icon: CloudRain },
     { id: "forest", name: "Forest", icon: TreePine },
     { id: "whale", name: "Whale", icon: Fish },
+    { id: "crickets", name: "Crickets", icon: Bug },
     { id: "none", name: "None", icon: Wind },
 ];
 
