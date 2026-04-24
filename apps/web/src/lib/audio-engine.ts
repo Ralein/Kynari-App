@@ -480,7 +480,11 @@ export class SoundscapeEngine {
         this.buildForest(gain);
     }
 
-    private buildWhale(gain: GainNode): void {
+    private async buildWhale(gain: GainNode): Promise<void> {
+        const acousticSuccess = await this.playAcoustic("nature", "whale", "/sounds/whale.mp3", gain);
+        if (acousticSuccess) return;
+        if (!this.isPlaying || this.natureType !== "whale") return;
+
         const rumble = this.ctx!.createOscillator();
         rumble.type = "sine"; rumble.frequency.value = 38;
         const rG = this.ctx!.createGain(); rG.gain.value = 0.055;
