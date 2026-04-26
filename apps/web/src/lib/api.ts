@@ -447,9 +447,13 @@ export async function getLullabies(
     return apiFetch<LullabyInfo[]>(url, { token });
 }
 
-export function generateLullabyUrl(token: string, voiceId: string, lullabyId: string): string {
-    // For audio element src — returns the streaming endpoint URL
-    return `${API_BASE}/api/voice/generate`;
+export function generateLullabyUrl(token: string, voiceId: string, lullabyId: string, speed?: number): string {
+    // For audio element src — returns the streaming endpoint URL with query params
+    let url = `${API_BASE}/api/voice/generate?voice_id=${voiceId}&lullaby_id=${lullabyId}&token=${token}`;
+    if (speed !== undefined) {
+        url += `&speed=${speed}`;
+    }
+    return url;
 }
 
 export async function generateLullabyBlob(
@@ -588,6 +592,16 @@ export async function deleteMilestone(
 
 
 // ─── Voice Speak API (Story Book Read Aloud) ────────────────
+
+export function generateSpeechUrl(token: string, voiceId: string, text: string, speed?: number): string {
+    // For audio element src — returns the streaming endpoint URL with query params
+    let url = `${API_BASE}/api/voice/speak?voice_id=${voiceId}&text=${encodeURIComponent(text)}&token=${token}`;
+    if (speed !== undefined) {
+        url += `&speed=${speed}`;
+    }
+    return url;
+}
+
 
 export async function speakText(
     token: string,

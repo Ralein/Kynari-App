@@ -78,53 +78,83 @@ async def list_lullabies(
     return voice_studio.list_lullabies(mood)
 
 
-@router.post("/generate")
+@router.api_route("/generate", methods=["GET", "POST"])
 async def generate_lullaby(
-    request: LullabyGenerateRequest,
+    request_data: LullabyGenerateRequest | None = None,
+    voice_id: str | None = Query(None),
+    lullaby_id: str | None = Query(None),
+    speed: float | None = Query(None, description="Speech rate (0.5 to 2.0). Defaults to 0.85 for lullabies."),
     user: dict = Depends(get_current_user),
 ):
     """Generate a lullaby with Kokoro TTS. Returns audio/wav stream."""
+    v_id = voice_id
+    l_id = lullaby_id
+    # Default speed for lullabies is 0.85 (soothing)
+    v_speed = speed if speed is not None else 0.85
+
+    if request_data:
+        v_id = v_id or request_data.voice_id
+        l_id = l_id or request_data.lullaby_id
+
+    if not v_id or not l_id:
+        raise HTTPException(status_code=400, detail="Missing voice_id or lullaby_id")
+
     audio_bytes = await voice_studio.generate_lullaby_audio(
-        voice_id=request.voice_id,
-        lullaby_id=request.lullaby_id,
+        voice_id=v_id,
+        lullaby_id=l_id,
+        speed=v_speed,
     )
 
     if not audio_bytes:
         raise HTTPException(
             status_code=503,
-            detail="TTS generation failed. Kokoro model may not be installed.",
+            detail="TTS generation failed. Verify model files and voice ID.",
         )
 
     return StreamingResponse(
         io.BytesIO(audio_bytes),
         media_type="audio/wav",
         headers={
-            "Content-Disposition": f'inline; filename="{request.lullaby_id}_{request.voice_id}.wav"',
+            "Content-Disposition": f'inline; filename="{l_id}_{v_id}.wav"',
+            "X-Speech-Rate": str(v_speed),
         },
     )
 
 
-@router.post("/speak")
+@router.api_route("/speak", methods=["GET", "POST"])
 async def speak_text(
-    request: SpeakRequest,
+    request_data: SpeakRequest | None = None,
+    voice_id: str | None = Query(None),
+    text: str | None = Query(None),
+    speed: float | None = Query(None, description="Speech rate (0.5 to 2.0). Defaults to 1.0 for speech."),
     user: dict = Depends(get_current_user),
 ):
-    """Generate speech from arbitrary text using Kokoro TTS.
+    """Generate speech from arbitrary text using Kokoro TTS."""
+    v_id = voice_id
+    t_text = text
+    # Default speed for speech is 1.0 (natural)
+    v_speed = speed if speed is not None else 1.0
 
-    Used for picture book read-aloud.
-    """
-    if len(request.text) > 2000:
+    if request_data:
+        v_id = v_id or request_data.voice_id
+        t_text = t_text or request_data.text
+
+    if not v_id or not t_text:
+        raise HTTPException(status_code=400, detail="Missing voice_id or text")
+
+    if len(t_text) > 2000:
         raise HTTPException(status_code=400, detail="Text too long (max 2000 chars)")
 
     audio_bytes = await voice_studio.generate_speech(
-        voice_id=request.voice_id,
-        text=request.text,
+        voice_id=v_id,
+        text=t_text,
+        speed=v_speed,
     )
 
     if not audio_bytes:
         raise HTTPException(
             status_code=503,
-            detail="TTS generation failed. Kokoro model may not be installed.",
+            detail="TTS generation failed. Verify model files and voice ID.",
         )
 
     return StreamingResponse(
@@ -132,5 +162,6 @@ async def speak_text(
         media_type="audio/wav",
         headers={
             "Content-Disposition": 'inline; filename="speech.wav"',
+            "X-Speech-Rate": str(v_speed),
         },
     )

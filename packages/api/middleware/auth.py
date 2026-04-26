@@ -6,7 +6,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 from config import get_settings
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 # ─── JWKS Cache ──────────────────────────────────────────────
 
@@ -73,14 +73,24 @@ def _get_signing_key(token: str) -> dict:
 
 # ─── Auth Dependency ─────────────────────────────────────────
 
+from fastapi import Query
+
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    token_query: str | None = Query(None, alias="token"),
 ) -> dict:
     """
-    Verify Clerk JWT token from Authorization header.
+    Verify Clerk JWT token from Authorization header or 'token' query param.
     Returns the decoded user payload (sub = user_id).
     """
-    token = credentials.credentials
+    token = None
+    if credentials:
+        token = credentials.credentials
+    if not token:
+        token = token_query
+
+    if not token:
+        raise HTTPException(status_code=401, detail="Authentication required")
 
     try:
         signing_key = _get_signing_key(token)

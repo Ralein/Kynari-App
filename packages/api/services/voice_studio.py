@@ -13,6 +13,9 @@ from database import fetch_one, execute_returning
 
 logger = logging.getLogger(__name__)
 
+# ─── Global Engine Cache ─────────────────────────────────────
+_kokoro_engine = None
+
 # ─── Model Paths ─────────────────────────────────────────────
 
 BASE_DIR = Path(__file__).parent.parent
@@ -145,82 +148,137 @@ def get_voice(voice_id: str) -> dict | None:
 
 
 def _clean_text_for_tts(text: str) -> str:
-    """Strip markdown and special characters for clean TTS input."""
+    """Strip markdown but preserve prosody-affecting punctuation."""
+    if not text:
+        return ""
+    # Remove markdown formatting
     text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
     text = re.sub(r"\*(.*?)\*", r"\1", text)
     text = re.sub(r"#{1,6}\s*", "", text)
     text = re.sub(r"\[([^\]]+)\]\([^\)]+\)", r"\1", text)
-    # Replace line breaks with spaces to ensure smooth, continuous speech flow
+    
+    # Normalize whitespace but keep sentence pauses
     text = text.replace("\n", " ")
-    return text.strip()
+    text = re.sub(r"\s+", " ", text)
+    
+    # Trim but keep a trailing period for Kokoro prosody if it looks like a sentence
+    text = text.strip()
+    if text and text[-1] not in ".!?":
+        text += "."
+        
+    return text
 
 
-async def generate_lullaby_audio(voice_id: str, lullaby_id: str) -> bytes | None:
+def _get_kokoro_engine():
+    """Lazy-load the Kokoro engine to cache the 310MB model in memory."""
+    global _kokoro_engine
+    if _kokoro_engine is None:
+        try:
+            import kokoro_onnx
+            import onnxruntime as ort
+            
+            if not MODEL_PATH.exists() or not VOICES_PATH.exists():
+                logger.error(f"Kokoro model or voices file missing at {MODEL_PATH}")
+                return None
+            
+            # Optimization: Set up session options for faster CPU inference
+            sess_options = ort.SessionOptions()
+            sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+            sess_options.intra_op_num_threads = 4
+            
+            # Create session manually to pass options
+            session = ort.InferenceSession(
+                str(MODEL_PATH),
+                sess_options=sess_options,
+                providers=["CPUExecutionProvider"]
+            )
+            
+            _kokoro_engine = kokoro_onnx.Kokoro.from_session(
+                session,
+                str(VOICES_PATH)
+            )
+            logger.info("Kokoro engine initialized via from_session with optimizations.")
+        except ImportError:
+            logger.warning("kokoro-onnx or onnxruntime not installed.")
+            return None
+        except Exception as e:
+            logger.error(f"Failed to initialize Kokoro engine: {e}")
+            return None
+    return _kokoro_engine
+
+
+async def generate_lullaby_audio(voice_id: str, lullaby_id: str, speed: float = 0.85) -> bytes | None:
     """Generate lullaby audio using Kokoro TTS.
-
-    Returns WAV bytes or None if generation fails.
+    
+    Defaults to a slower, more soothing 0.85 speed.
     """
     lullaby = get_lullaby(lullaby_id)
     if not lullaby:
         return None
 
-    voice = get_voice(voice_id)
-    if not voice:
-        return None
-
     text = _clean_text_for_tts(lullaby["lyrics"])
+    kokoro = _get_kokoro_engine()
+    if not kokoro:
+        return None
 
     try:
-        import kokoro_onnx
         import soundfile as sf
+        samples, sample_rate = kokoro.create(text, voice=voice_id, speed=speed, lang="en-us")
 
-        kokoro = kokoro_onnx.Kokoro(str(MODEL_PATH), str(VOICES_PATH))
-        # Match Story Book speed (0.9) for better natural rhythm
-        samples, sample_rate = kokoro.create(text, voice=voice_id, speed=0.9, lang="en-us")
-
-        # Write to WAV bytes
         buf = io.BytesIO()
         sf.write(buf, samples, sample_rate, format="WAV")
-        buf.seek(0)
-        return buf.read()
-
-    except ImportError:
-        logger.warning("kokoro-onnx not installed — returning None")
-        return None
+        return buf.getvalue()
     except Exception as e:
-        logger.error(f"Kokoro TTS generation failed: {e}")
+        logger.error(f"Lullaby generation failed: {e}")
         return None
 
 
-async def generate_speech(voice_id: str, text: str) -> bytes | None:
-    """Generate arbitrary speech using Kokoro TTS (for picture book read-aloud).
+def generate_lullaby_stream(voice_id: str, lullaby_id: str, speed: float = 0.85):
+    """Generate a stream of audio chunks for a lullaby."""
+    lullaby = get_lullaby(lullaby_id)
+    if not lullaby: return
+    
+    text = _clean_text_for_tts(lullaby["lyrics"])
+    kokoro = _get_kokoro_engine()
+    if not kokoro: return
 
-    Returns WAV bytes or None if generation fails.
-    """
-    voice = get_voice(voice_id)
-    if not voice:
-        return None
+    import soundfile as sf
+    for samples, sample_rate in kokoro.create_stream(text, voice=voice_id, speed=speed, lang="en-us"):
+        buf = io.BytesIO()
+        sf.write(buf, samples, sample_rate, format="WAV")
+        yield buf.getvalue()
 
+
+async def generate_speech(voice_id: str, text: str, speed: float = 1.0) -> bytes | None:
+    """Generate speech from text (for picture books). Default speed 1.0."""
     text = _clean_text_for_tts(text)
+    kokoro = _get_kokoro_engine()
+    if not kokoro:
+        return None
 
     try:
-        import kokoro_onnx
         import soundfile as sf
-
-        kokoro = kokoro_onnx.Kokoro(str(MODEL_PATH), str(VOICES_PATH))
-        samples, sample_rate = kokoro.create(text, voice=voice_id, speed=0.9, lang="en-us")
+        samples, sample_rate = kokoro.create(text, voice=voice_id, speed=speed, lang="en-us")
 
         buf = io.BytesIO()
         sf.write(buf, samples, sample_rate, format="WAV")
-        buf.seek(0)
-        return buf.read()
-
-    except ImportError:
-        logger.warning("kokoro-onnx not installed — returning None")
-        return None
+        return buf.getvalue()
     except Exception as e:
-        logger.error(f"Kokoro TTS speech failed: {e}")
+        logger.error(f"Speech generation failed: {e}")
         return None
+
+
+def generate_speech_stream(voice_id: str, text: str, speed: float = 1.0):
+    """Stream speech chunks for text."""
+    text = _clean_text_for_tts(text)
+    kokoro = _get_kokoro_engine()
+    if not kokoro: return
+
+    import soundfile as sf
+    for samples, sample_rate in kokoro.create_stream(text, voice=voice_id, speed=speed, lang="en-us"):
+        buf = io.BytesIO()
+        sf.write(buf, samples, sample_rate, format="WAV")
+        yield buf.getvalue()
 
 
 # ─── Preference Management ───────────────────────────────────

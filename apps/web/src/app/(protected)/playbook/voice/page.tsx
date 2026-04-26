@@ -5,15 +5,17 @@ import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import {
     ChevronRight,
-    Music,
     Loader2,
     Moon,
+    Timer,
+    Plus,
+    Sparkles,
 } from "lucide-react";
 import { VoiceSelector } from "@/components/voice/VoiceSelector";
 import { NowPlayingBar } from "@/components/voice/NowPlayingBar";
 import { MoodFilter } from "@/components/voice/MoodFilter";
 import { LullabyLibrary } from "@/components/voice/LullabyLibrary";
-import { getVoices, getLullabies, generateLullabyBlob, type VoiceInfo, type LullabyInfo } from "@/lib/api";
+import { getVoices, getLullabies, generateLullabyUrl, type VoiceInfo, type LullabyInfo, generateSpeechUrl } from "@/lib/api";
 
 const MOOD_CHIPS = [
     { id: "all", label: "All", color: "#F0897A" },
@@ -21,6 +23,7 @@ const MOOD_CHIPS = [
     { id: "calm", label: "Calm", color: "#93E2FA" },
     { id: "comfort", label: "Comfort", color: "#F3A595" },
     { id: "playful", label: "Playful", color: "#B5EAC5" },
+    { id: "personal", label: "Personal", color: "#FFB347" },
 ];
 
 export default function VoiceLullabyPage() {
@@ -39,9 +42,18 @@ export default function VoiceLullabyPage() {
     const [progress, setProgress] = useState(0);
     const [currentLullaby, setCurrentLullaby] = useState<LullabyInfo | null>(null);
     const [generating, setGenerating] = useState(false);
+    const [isLooping, setIsLooping] = useState(false);
+    const [isShuffling, setIsShuffling] = useState(false);
+    const [sleepTimer, setSleepTimer] = useState<number | null>(null); // minutes
+    const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+    const [customText, setCustomText] = useState("");
+    const [personalLullabies, setPersonalLullabies] = useState<LullabyInfo[]>([]);
+    const [playbackSpeed, setPlaybackSpeed] = useState(0.9);
 
-    // Audio Ref
+    // Audio Refs
     const audioRef = useRef<HTMLAudioElement | null>(null);
+    const preloadedAudioRef = useRef<HTMLAudioElement | null>(null);
+    const preloadedLullabyRef = useRef<LullabyInfo | null>(null);
 
     // Load voices and lullabies from API
     useEffect(() => {
@@ -66,34 +78,22 @@ export default function VoiceLullabyPage() {
         load();
     }, [getToken]);
 
-    // Progress tracking
-    useEffect(() => {
-        const audio = audioRef.current;
-        if (!audio) return;
-
-        const updateProgress = () => {
-            const pct = (audio.currentTime / audio.duration) * 100;
-            setProgress(isNaN(pct) ? 0 : pct);
-        };
-
-        const handleEnded = () => {
-            setIsPlaying(false);
-            setPlayingId(null);
-            setProgress(0);
-            setCurrentLullaby(null);
-        };
-
-        audio.addEventListener("timeupdate", updateProgress);
-        audio.addEventListener("ended", handleEnded);
-
-        return () => {
-            audio.removeEventListener("timeupdate", updateProgress);
-            audio.removeEventListener("ended", handleEnded);
-        };
-    }, [isPlaying]);
-
-    const selectVoice = useCallback((voiceId: string) => {
-        setSelectedVoice(voiceId);
+    const stopPlayback = useCallback(() => {
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current = null;
+        }
+        // Also clear preload
+        if (preloadedAudioRef.current) {
+            preloadedAudioRef.current.pause();
+            preloadedAudioRef.current = null;
+        }
+        preloadedLullabyRef.current = null;
+        
+        setIsPlaying(false);
+        setPlayingId(null);
+        setCurrentLullaby(null);
+        setProgress(0);
     }, []);
 
     const playLullaby = useCallback(async (lullaby: LullabyInfo) => {
@@ -113,23 +113,245 @@ export default function VoiceLullabyPage() {
             const token = await getToken();
             if (!token) throw new Error("No token");
 
+            // Soothing mode forces 0.8 speed, otherwise use current selected speed
             const activeVoice = isSoothingMode ? "af_heart" : selectedVoice;
-            const blob = await generateLullabyBlob(token, activeVoice, lullaby.id);
-            const url = URL.createObjectURL(blob);
+            const activeSpeed = isSoothingMode ? 0.8 : playbackSpeed;
+            
+            const url = lullaby.mood === "personal" 
+                ? generateSpeechUrl(token, activeVoice, lullaby.lyrics, activeSpeed)
+                : generateLullabyUrl(token, activeVoice, lullaby.id, activeSpeed);
 
             const audio = new Audio(url);
+            audio.loop = isLooping;
             audioRef.current = audio;
             
-            audio.play();
-            setIsPlaying(true);
+            audio.oncanplay = () => {
+                setGenerating(false);
+                audio.play();
+                setIsPlaying(true);
+            };
+
+            audio.onerror = () => {
+                console.error("Audio playback error");
+                setGenerating(false);
+                setPlayingId(null);
+            };
+
         } catch (err) {
             console.error("Lullaby generation failed:", err);
             setPlayingId(null);
             setCurrentLullaby(null);
-        } finally {
             setGenerating(false);
         }
-    }, [selectedVoice, getToken]);
+    }, [selectedVoice, isSoothingMode, playbackSpeed, isLooping, getToken]);
+
+    const shuffleRhymes = useCallback(() => {
+        if (lullabies.length === 0) return;
+        const randomIndex = Math.floor(Math.random() * lullabies.length);
+        const randomLullaby = lullabies[randomIndex];
+        playLullaby(randomLullaby);
+    }, [lullabies, playLullaby]);
+
+    const playNextRhyme = useCallback(() => {
+        if (lullabies.length === 0 || !currentLullaby) {
+            stopPlayback();
+            return;
+        }
+        
+        const currentIndex = lullabies.findIndex(l => l.id === currentLullaby.id);
+        if (currentIndex === -1 || currentIndex === lullabies.length - 1) {
+            stopPlayback();
+        } else {
+            playLullaby(lullabies[currentIndex + 1]);
+        }
+    }, [lullabies, currentLullaby, playLullaby, stopPlayback]);
+
+    const preloadNext = useCallback(async () => {
+        if (lullabies.length === 0 || !currentLullaby || preloadedLullabyRef.current) return;
+
+        let nextLullaby: LullabyInfo;
+        if (isShuffling) {
+            const randomIndex = Math.floor(Math.random() * lullabies.length);
+            nextLullaby = lullabies[randomIndex];
+        } else {
+            const currentIndex = lullabies.findIndex(l => l.id === currentLullaby.id);
+            if (currentIndex === -1 || currentIndex === lullabies.length - 1) return;
+            nextLullaby = lullabies[currentIndex + 1];
+        }
+
+        try {
+            const token = await getToken();
+            if (!token) return;
+
+            const activeVoice = isSoothingMode ? "af_heart" : selectedVoice;
+            const activeSpeed = isSoothingMode ? 0.8 : playbackSpeed;
+            const url = nextLullaby.mood === "personal"
+                ? generateSpeechUrl(token, activeVoice, nextLullaby.lyrics, activeSpeed)
+                : generateLullabyUrl(token, activeVoice, nextLullaby.id, activeSpeed);
+
+            const audio = new Audio(url);
+            audio.preload = "auto";
+            preloadedAudioRef.current = audio;
+            preloadedLullabyRef.current = nextLullaby;
+            
+            // Just start loading it
+            audio.load();
+        } catch (err) {
+            console.error("Preload failed:", err);
+        }
+    }, [lullabies, currentLullaby, isShuffling, isSoothingMode, selectedVoice, playbackSpeed, getToken]);
+
+    // Load voices and lullabies from API
+    useEffect(() => {
+        const audio = audioRef.current;
+        if (!audio) return;
+
+        const updateProgress = () => {
+            const pct = (audio.currentTime / audio.duration) * 100;
+            setProgress(isNaN(pct) ? 0 : pct);
+
+            // Preload next rhyme when current is 80% done
+            if (pct > 80 && !preloadedLullabyRef.current && !isLooping) {
+                preloadNext();
+            }
+        };
+
+        const handleEnded = () => {
+            if (isLooping) return; // Handled by audio.loop
+
+            if (preloadedLullabyRef.current && preloadedAudioRef.current) {
+                // Use preloaded audio
+                const nextLullaby = preloadedLullabyRef.current;
+                const nextAudio = preloadedAudioRef.current;
+                
+                // Clear current
+                if (audioRef.current) {
+                    audioRef.current.pause();
+                }
+                
+                // Swap
+                setPlayingId(nextLullaby.id);
+                setCurrentLullaby(nextLullaby);
+                setGenerating(false);
+                setProgress(0);
+                
+                audioRef.current = nextAudio;
+                nextAudio.play();
+                setIsPlaying(true);
+                
+                // Reset preload refs for next cycle
+                preloadedLullabyRef.current = null;
+                preloadedAudioRef.current = null;
+            } else {
+                // Fallback to regular shuffle/next if preload isn't ready
+                if (isShuffling) {
+                    shuffleRhymes();
+                } else {
+                    playNextRhyme();
+                }
+            }
+        };
+
+        audio.addEventListener("timeupdate", updateProgress);
+        audio.addEventListener("ended", handleEnded);
+
+        return () => {
+            audio.removeEventListener("timeupdate", updateProgress);
+            audio.removeEventListener("ended", handleEnded);
+        };
+    }, [isLooping, isShuffling, shuffleRhymes, playNextRhyme, preloadNext]);
+
+    // Timer logic
+    useEffect(() => {
+        if (secondsLeft === null || !isPlaying) return;
+
+        if (secondsLeft <= 0) {
+            stopPlayback();
+            setSleepTimer(null);
+            setSecondsLeft(null);
+            return;
+        }
+
+        const interval = setInterval(() => {
+            setSecondsLeft(prev => {
+                if (prev === null) return null;
+                const next = prev - 1;
+                // Update the minutes state every minute for the UI badge
+                if (next % 60 === 0) {
+                    setSleepTimer(next / 60);
+                }
+                return next;
+            });
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [secondsLeft, isPlaying, stopPlayback]);
+
+    const setTimerMinutes = (mins: number | null) => {
+        setSleepTimer(mins);
+        setSecondsLeft(mins ? mins * 60 : null);
+    };
+
+    const selectVoice = useCallback((voiceId: string) => {
+        setSelectedVoice(voiceId);
+    }, []);
+
+
+
+    const playCustomRhyme = useCallback(async () => {
+        if (!customText.trim()) return;
+
+        // Stop current audio
+        if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current = null;
+        }
+
+        const dummyLullaby: LullabyInfo = {
+            id: "custom",
+            title: "Custom Rhyme",
+            lyrics: customText,
+            mood: "custom",
+            origin: "AI Generated",
+            duration_estimate: 0
+        };
+
+        setPlayingId("custom");
+        setCurrentLullaby(dummyLullaby);
+        setGenerating(true);
+        setProgress(0);
+        setIsPlaying(false);
+
+        try {
+            const token = await getToken();
+            if (!token) throw new Error("No token");
+
+            const activeVoice = isSoothingMode ? "af_heart" : selectedVoice;
+            const activeSpeed = isSoothingMode ? 0.8 : playbackSpeed;
+            
+            const url = generateSpeechUrl(token, activeVoice, customText, activeSpeed);
+
+            const audio = new Audio(url);
+            audio.loop = isLooping;
+            audioRef.current = audio;
+            
+            audio.oncanplay = () => {
+                setGenerating(false);
+                audio.play();
+                setIsPlaying(true);
+            };
+
+            audio.onerror = () => {
+                console.error("Custom audio playback error");
+                setGenerating(false);
+                setPlayingId(null);
+            };
+        } catch (err) {
+            console.error("Custom rhyme playback failed:", err);
+            setPlayingId(null);
+            setGenerating(false);
+        }
+    }, [customText, selectedVoice, isSoothingMode, playbackSpeed, isLooping, getToken]);
 
     const togglePause = () => {
         const audio = audioRef.current;
@@ -144,20 +366,42 @@ export default function VoiceLullabyPage() {
         }
     };
 
-    const stopPlayback = () => {
+    const toggleLoop = useCallback(() => {
+        const newLoop = !isLooping;
+        setIsLooping(newLoop);
         if (audioRef.current) {
-            audioRef.current.pause();
-            audioRef.current = null;
+            audioRef.current.loop = newLoop;
         }
-        setIsPlaying(false);
-        setPlayingId(null);
-        setCurrentLullaby(null);
-        setProgress(0);
+    }, [isLooping]);
+
+    const toggleShuffle = useCallback(() => {
+        setIsShuffling(!isShuffling);
+    }, [isShuffling]);
+
+
+
+    const addToPersonalList = () => {
+        if (!customText.trim()) return;
+        
+        const newLullaby: LullabyInfo = {
+            id: `personal-${Date.now()}`,
+            title: customText.slice(0, 20) + (customText.length > 20 ? "..." : ""),
+            lyrics: customText,
+            mood: "personal",
+            origin: "My Custom Lullaby",
+            duration_estimate: 0
+        };
+
+        setPersonalLullabies(prev => [newLullaby, ...prev]);
+        setCustomText("");
+        setActiveMood("personal"); // Auto-switch to personal to show it
     };
 
+    const allLullabies = [...lullabies, ...personalLullabies];
+
     const filteredLullabies = activeMood === "all"
-        ? lullabies
-        : lullabies.filter((l) => l.mood === activeMood);
+        ? allLullabies
+        : allLullabies.filter((l) => l.mood === activeMood);
 
     if (loading) {
         return (
@@ -190,17 +434,39 @@ export default function VoiceLullabyPage() {
                     </p>
                 </div>
 
-                <button
-                    onClick={() => setIsSoothingMode(!isSoothingMode)}
-                    className={`flex items-center gap-1.5 px-4 py-2.5 rounded-2xl border text-xs font-semibold transition-all ${
-                        isSoothingMode
-                            ? "bg-[#EAE2FB] border-[#6B48C8]/30 text-[#6B48C8] shadow-sm tracking-wide"
-                            : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
-                    }`}
-                >
-                    <Moon className={`w-3.5 h-3.5 ${isSoothingMode ? "fill-[#6B48C8]" : ""}`} />
-                    Soothing Mode
-                </button>
+                <div className="flex items-center gap-4">
+                    {/* Speed Control */}
+                    <div className="flex items-center gap-3 px-4 py-2 rounded-2xl border border-slate-200 bg-white shadow-sm">
+                        <Timer className="w-4 h-4 text-[#F0897A]" />
+                        <div className="flex flex-col">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Speed</span>
+                            <div className="flex items-center gap-3">
+                                <input
+                                    type="range"
+                                    min="0.5"
+                                    max="2.0"
+                                    step="0.1"
+                                    value={playbackSpeed}
+                                    onChange={(e) => setPlaybackSpeed(parseFloat(e.target.value))}
+                                    className="w-24 h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-[#F0897A]"
+                                />
+                                <span className="text-xs font-bold text-[#1a1b2e] w-8">{playbackSpeed}x</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button
+                        onClick={() => setIsSoothingMode(!isSoothingMode)}
+                        className={`flex items-center gap-1.5 px-5 py-2.5 rounded-2xl border text-xs font-semibold transition-all ${
+                            isSoothingMode
+                                ? "bg-[#EAE2FB] border-[#6B48C8]/30 text-[#6B48C8] shadow-sm tracking-wide"
+                                : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                        }`}
+                    >
+                        <Moon className={`w-3.5 h-3.5 ${isSoothingMode ? "fill-[#6B48C8]" : ""}`} />
+                        Soothing Mode
+                    </button>
+                </div>
             </div>
 
             {/* Now Playing Bar */}
@@ -212,9 +478,60 @@ export default function VoiceLullabyPage() {
                 progress={progress}
                 selectedVoice={selectedVoice}
                 voices={voices}
+                activeSpeed={isSoothingMode ? 0.8 : playbackSpeed}
+                isLooping={isLooping}
+                isShuffling={isShuffling}
+                sleepTimer={sleepTimer}
+                onToggleLoop={toggleLoop}
+                onToggleShuffle={toggleShuffle}
+                onSetTimer={setTimerMinutes}
                 onTogglePause={togglePause}
                 onStop={stopPlayback}
             />
+
+            {/* Custom Rhyme Section */}
+            <div className="bg-gradient-to-br from-[#FFF4E5] to-[#FFEDD5] rounded-[2.5rem] p-6 border border-orange-100 shadow-sm">
+                <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-2xl bg-orange-200/50 flex items-center justify-center">
+                        <Plus className="w-5 h-5 text-orange-600" />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-bold text-[#1a1b2e]">Custom Lullaby</h3>
+                        <p className="text-xs text-orange-700/70">Create a personalized rhyme for your little one</p>
+                    </div>
+                </div>
+                
+                <div className="relative">
+                    <textarea
+                        value={customText}
+                        onChange={(e) => setCustomText(e.target.value)}
+                        placeholder="Twinkle twinkle little star, daddy loves you as you are..."
+                        className="w-full h-32 bg-white/80 backdrop-blur-sm border-2 border-orange-100 rounded-2xl p-4 text-sm text-[#1a1b2e] placeholder:text-slate-400 focus:outline-none focus:border-orange-300 transition-all resize-none"
+                    />
+                    <div className="absolute bottom-4 right-4 flex items-center gap-2">
+                        <button
+                            onClick={addToPersonalList}
+                            disabled={!customText.trim()}
+                            className="flex items-center gap-2 px-4 py-2 bg-white/60 hover:bg-white text-orange-600 border border-orange-200 rounded-xl text-xs font-bold transition-all disabled:opacity-50"
+                        >
+                            <Plus className="w-3.5 h-3.5" />
+                            Add to list
+                        </button>
+                        <button
+                            onClick={playCustomRhyme}
+                            disabled={generating || !customText.trim()}
+                            className="flex items-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:shadow-none"
+                        >
+                            {generating && playingId === "custom" ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                                <Sparkles className="w-3.5 h-3.5" />
+                            )}
+                            Play Lullaby
+                        </button>
+                    </div>
+                </div>
+            </div>
 
             {/* Voice Selector */}
             <VoiceSelector 

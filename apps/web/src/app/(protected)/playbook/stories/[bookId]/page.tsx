@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { getBook, getVoices, speakText, type BookResponse, type VoiceInfo } from "@/lib/api";
+import { getBook, getVoices, generateSpeechUrl, speakText, type BookResponse, type VoiceInfo } from "@/lib/api";
 import {
     ChevronRight,
     ChevronLeft,
@@ -99,22 +99,31 @@ export default function BookReaderPage() {
             if (!token) throw new Error("No token");
 
             const activeVoice = isSoothingMode ? "af_heart" : selectedVoice;
-            const blob = await speakText(token, activeVoice, pageText);
-            const url = URL.createObjectURL(blob);
+            const activeSpeed = isSoothingMode ? 0.85 : 1.0;
+            const url = generateSpeechUrl(token, activeVoice, pageText, activeSpeed);
 
             const audio = new Audio(url);
             audioRef.current = audio;
             
+            audio.oncanplay = () => {
+                setGenerating(false);
+                audio.play();
+                setIsReading(true);
+            };
+
             audio.onended = () => {
                 setIsReading(false);
             };
 
-            await audio.play();
-            setIsReading(true);
+            audio.onerror = () => {
+                console.error("Audio playback error");
+                setGenerating(false);
+                setIsReading(false);
+            };
+
         } catch (err) {
             console.error("Read Aloud failed:", err);
             setIsReading(false);
-        } finally {
             setGenerating(false);
         }
     };
