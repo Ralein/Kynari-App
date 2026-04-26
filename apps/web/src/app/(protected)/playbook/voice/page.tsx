@@ -57,6 +57,16 @@ export default function VoiceLullabyPage() {
 
     // Load voices and lullabies from API
     useEffect(() => {
+        // Load personal lullabies from localStorage
+        const saved = localStorage.getItem("kynari_personal_lullabies");
+        if (saved) {
+            try {
+                setPersonalLullabies(JSON.parse(saved));
+            } catch (e) {
+                console.error("Failed to parse personal lullabies", e);
+            }
+        }
+
         async function load() {
             try {
                 const token = await getToken();
@@ -78,6 +88,11 @@ export default function VoiceLullabyPage() {
         load();
     }, [getToken]);
 
+    // Save personal lullabies to localStorage
+    useEffect(() => {
+        localStorage.setItem("kynari_personal_lullabies", JSON.stringify(personalLullabies));
+    }, [personalLullabies]);
+
     const stopPlayback = useCallback(() => {
         if (audioRef.current) {
             audioRef.current.pause();
@@ -95,6 +110,26 @@ export default function VoiceLullabyPage() {
         setCurrentLullaby(null);
         setProgress(0);
     }, []);
+
+    // Component Unmount Cleanup
+    useEffect(() => {
+        return () => {
+            if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current = null;
+            }
+            if (preloadedAudioRef.current) {
+                preloadedAudioRef.current.pause();
+                preloadedAudioRef.current = null;
+            }
+        };
+    }, []);
+
+    // Clear preload if settings change
+    useEffect(() => {
+        preloadedAudioRef.current = null;
+        preloadedLullabyRef.current = null;
+    }, [selectedVoice, playbackSpeed, isSoothingMode]);
 
     const playLullaby = useCallback(async (lullaby: LullabyInfo) => {
         // Stop current audio if any
