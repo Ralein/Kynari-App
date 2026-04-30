@@ -21,6 +21,7 @@ interface NowPlayingBarProps {
     onSetTimer: (minutes: number | null) => void;
     onTogglePause: () => void;
     onStop: () => void;
+    onSeek?: (pct: number) => void;
 }
 
 export function NowPlayingBar({
@@ -39,7 +40,8 @@ export function NowPlayingBar({
     onToggleShuffle,
     onSetTimer,
     onTogglePause,
-    onStop
+    onStop,
+    onSeek
 }: NowPlayingBarProps) {
     const [showTimerMenu, setShowTimerMenu] = useState(false);
 
@@ -178,10 +180,20 @@ export function NowPlayingBar({
                 </div>
             </div>
             {/* Progress bar */}
-            <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+            <div className="relative h-1.5 mt-1 bg-slate-100 rounded-full group/progress">
                 <div
-                    className="h-full bg-gradient-to-r from-[#93E2FA] to-[#3AADDB] rounded-full transition-all duration-200"
+                    className="absolute h-full bg-gradient-to-r from-[#93E2FA] to-[#3AADDB] rounded-full transition-all duration-200 pointer-events-none"
                     style={{ width: `${progress}%` }}
+                />
+                <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    value={progress}
+                    onChange={(e) => onSeek?.(parseFloat(e.target.value))}
+                    className="absolute top-0 left-0 w-full h-full opacity-0 cursor-pointer appearance-none z-10"
+                    disabled={generating}
                 />
             </div>
         </div>

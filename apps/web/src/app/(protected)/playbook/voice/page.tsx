@@ -49,6 +49,13 @@ export default function VoiceLullabyPage() {
     const [customText, setCustomText] = useState("");
     const [personalLullabies, setPersonalLullabies] = useState<LullabyInfo[]>([]);
     const [playbackSpeed, setPlaybackSpeed] = useState(0.9);
+    const [shuffleQueue, setShuffleQueue] = useState<string[]>([]);
+
+    const allLullabies = [...lullabies, ...personalLullabies];
+
+    const filteredLullabies = activeMood === "all"
+        ? allLullabies
+        : allLullabies.filter((l) => l.mood === activeMood);
 
     // Audio Refs
     const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -181,38 +188,64 @@ export default function VoiceLullabyPage() {
     }, [selectedVoice, isSoothingMode, playbackSpeed, isLooping, getToken]);
 
     const shuffleRhymes = useCallback(() => {
-        if (lullabies.length === 0) return;
-        const randomIndex = Math.floor(Math.random() * lullabies.length);
-        const randomLullaby = lullabies[randomIndex];
-        playLullaby(randomLullaby);
-    }, [lullabies, playLullaby]);
+        if (allLullabies.length === 0) return;
+        
+        let nextQueue = [...shuffleQueue];
+        if (nextQueue.length === 0) {
+            // Refill and shuffle IDs
+            nextQueue = allLullabies.map(l => l.id).sort(() => Math.random() - 0.5);
+            // Don't start with the current one if possible
+            if (currentLullaby && nextQueue[0] === currentLullaby.id && nextQueue.length > 1) {
+                const first = nextQueue.shift()!;
+                nextQueue.push(first);
+            }
+        }
+
+        const nextId = nextQueue.shift()!;
+        setShuffleQueue(nextQueue);
+        
+        const nextLullaby = allLullabies.find(l => l.id === nextId);
+        if (nextLullaby) {
+            playLullaby(nextLullaby);
+        }
+    }, [allLullabies, currentLullaby, shuffleQueue, playLullaby]);
 
     const playNextRhyme = useCallback(() => {
-        if (lullabies.length === 0 || !currentLullaby) {
+        if (allLullabies.length === 0 || !currentLullaby) {
             stopPlayback();
             return;
         }
         
-        const currentIndex = lullabies.findIndex(l => l.id === currentLullaby.id);
-        if (currentIndex === -1 || currentIndex === lullabies.length - 1) {
+        const currentIndex = allLullabies.findIndex(l => l.id === currentLullaby.id);
+        if (currentIndex === -1 || currentIndex === allLullabies.length - 1) {
             stopPlayback();
         } else {
-            playLullaby(lullabies[currentIndex + 1]);
+            playLullaby(allLullabies[currentIndex + 1]);
         }
-    }, [lullabies, currentLullaby, playLullaby, stopPlayback]);
+    }, [allLullabies, currentLullaby, playLullaby, stopPlayback]);
 
     const preloadNext = useCallback(async () => {
-        if (lullabies.length === 0 || !currentLullaby || preloadedLullabyRef.current) return;
+        if (allLullabies.length === 0 || !currentLullaby || preloadedLullabyRef.current) return;
 
-        let nextLullaby: LullabyInfo;
+        let nextLullaby: LullabyInfo | undefined;
         if (isShuffling) {
-            const randomIndex = Math.floor(Math.random() * lullabies.length);
-            nextLullaby = lullabies[randomIndex];
+            // Look ahead in the shuffle queue if it exists
+            const nextId = shuffleQueue[0];
+            if (nextId) {
+                nextLullaby = allLullabies.find(l => l.id === nextId);
+            } else {
+                // If queue is empty, just pick a random one that isn't the current one
+                const others = allLullabies.filter(l => l.id !== currentLullaby.id);
+                nextLullaby = others.length > 0 ? others[Math.floor(Math.random() * others.length)] : currentLullaby;
+            }
         } else {
-            const currentIndex = lullabies.findIndex(l => l.id === currentLullaby.id);
-            if (currentIndex === -1 || currentIndex === lullabies.length - 1) return;
-            nextLullaby = lullabies[currentIndex + 1];
+            const currentIndex = allLullabies.findIndex(l => l.id === currentLullaby.id);
+            if (currentIndex !== -1 && currentIndex < allLullabies.length - 1) {
+                nextLullaby = allLullabies[currentIndex + 1];
+            }
         }
+
+        if (!nextLullaby) return;
 
         try {
             const token = await getToken();
@@ -220,6 +253,7 @@ export default function VoiceLullabyPage() {
 
             const activeVoice = isSoothingMode ? "af_heart" : selectedVoice;
             const activeSpeed = isSoothingMode ? 0.8 : playbackSpeed;
+            
             const url = nextLullaby.mood === "personal"
                 ? generateSpeechUrl(token, activeVoice, nextLullaby.lyrics, activeSpeed)
                 : generateLullabyUrl(token, activeVoice, nextLullaby.id, activeSpeed);
@@ -229,12 +263,11 @@ export default function VoiceLullabyPage() {
             preloadedAudioRef.current = audio;
             preloadedLullabyRef.current = nextLullaby;
             
-            // Just start loading it
             audio.load();
         } catch (err) {
             console.error("Preload failed:", err);
         }
-    }, [lullabies, currentLullaby, isShuffling, isSoothingMode, selectedVoice, playbackSpeed, getToken]);
+    }, [allLullabies, currentLullaby, isShuffling, shuffleQueue, isSoothingMode, selectedVoice, playbackSpeed, getToken]);
 
     // Load voices and lullabies from API
     useEffect(() => {
@@ -413,7 +446,13 @@ export default function VoiceLullabyPage() {
         setIsShuffling(!isShuffling);
     }, [isShuffling]);
 
-
+    const handleSeek = (pct: number) => {
+        const audio = audioRef.current;
+        if (!audio || !audio.duration) return;
+        
+        audio.currentTime = (pct / 100) * audio.duration;
+        setProgress(pct);
+    };
 
     const addToPersonalList = () => {
         if (!customText.trim()) return;
@@ -432,9 +471,9 @@ export default function VoiceLullabyPage() {
         setActiveMood("personal"); // Auto-switch to personal to show it
     };
 
-    const allLullabies = [...lullabies, ...personalLullabies];
+    const allLullabies_unused = [...lullabies, ...personalLullabies];
 
-    const filteredLullabies = activeMood === "all"
+    const filteredLullabies_unused = activeMood === "all"
         ? allLullabies
         : allLullabies.filter((l) => l.mood === activeMood);
 
@@ -522,6 +561,7 @@ export default function VoiceLullabyPage() {
                 onSetTimer={setTimerMinutes}
                 onTogglePause={togglePause}
                 onStop={stopPlayback}
+                onSeek={handleSeek}
             />
 
             {/* Custom Rhyme Section */}
