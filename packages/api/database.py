@@ -24,8 +24,10 @@ def get_pool() -> psycopg_pool.ConnectionPool:
             )
         _pool = psycopg_pool.ConnectionPool(
             conninfo=settings.database_url,
-            min_size=1,
+            min_size=0,
             max_size=10,
+            max_idle=240, # Close idle connections before Neon's 5-minute timeout
+            max_lifetime=3600,
             kwargs={"row_factory": dict_row},
         )
     return _pool
