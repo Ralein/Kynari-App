@@ -484,9 +484,9 @@ def analyze_face(image: Image.Image) -> dict[str, Any]:
             logger.debug("Face not detected on first pass. Trying CLAHE contrast enhancement...")
             try:
                 lab = cv2.cvtColor(img_array, cv2.COLOR_RGB2LAB)
-                l, a, b = cv2.split(lab)
+                l_channel, a, b = cv2.split(lab)
                 clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-                cl = clahe.apply(l)
+                cl = clahe.apply(l_channel)
                 limg = cv2.merge((cl, a, b))
                 enhanced_img = cv2.cvtColor(limg, cv2.COLOR_LAB2RGB)
                 results = try_detect(enhanced_img)

@@ -133,13 +133,13 @@ def list_voices() -> list[dict]:
 def list_lullabies(mood: str | None = None) -> list[dict]:
     """List lullaby catalogue, optionally filtered by mood."""
     if mood:
-        return [l for l in LULLABIES if l["mood"] == mood]
+        return [item for item in LULLABIES if item["mood"] == mood]
     return LULLABIES
 
 
 def get_lullaby(lullaby_id: str) -> dict | None:
     """Get a single lullaby by ID."""
-    return next((l for l in LULLABIES if l["id"] == lullaby_id), None)
+    return next((item for item in LULLABIES if item["id"] == lullaby_id), None)
 
 
 def get_voice(voice_id: str) -> dict | None:
@@ -236,11 +236,13 @@ async def generate_lullaby_audio(voice_id: str, lullaby_id: str, speed: float = 
 def generate_lullaby_stream(voice_id: str, lullaby_id: str, speed: float = 0.85):
     """Generate a stream of audio chunks for a lullaby."""
     lullaby = get_lullaby(lullaby_id)
-    if not lullaby: return
+    if not lullaby:
+        return
     
     text = _clean_text_for_tts(lullaby["lyrics"])
     kokoro = _get_kokoro_engine()
-    if not kokoro: return
+    if not kokoro:
+        return
 
     import soundfile as sf
     for samples, sample_rate in kokoro.create_stream(text, voice=voice_id, speed=speed, lang="en-us"):
@@ -272,7 +274,8 @@ def generate_speech_stream(voice_id: str, text: str, speed: float = 1.0):
     """Stream speech chunks for text."""
     text = _clean_text_for_tts(text)
     kokoro = _get_kokoro_engine()
-    if not kokoro: return
+    if not kokoro:
+        return
 
     import soundfile as sf
     for samples, sample_rate in kokoro.create_stream(text, voice=voice_id, speed=speed, lang="en-us"):

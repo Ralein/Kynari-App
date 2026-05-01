@@ -125,10 +125,6 @@ export default function MemoryGardenPage() {
         }
     };
 
-    const getMilestoneIcon = (type: string) => {
-        const t = MILESTONE_TYPES.find((mt) => mt.id === type);
-        return t || MILESTONE_TYPES[4]; // default to custom
-    };
 
     return (
         <div className="animate-fade-in space-y-6 relative z-10 w-full mx-auto">

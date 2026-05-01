@@ -4,9 +4,8 @@ to synthesize the week's emotional journey.
 """
 
 import logging
-import json
-from datetime import datetime, date, timedelta
-from database import fetch_one, fetch_all, execute_returning, execute, get_pool
+from datetime import date, timedelta
+from database import fetch_one, fetch_all, execute_returning, execute
 from config import get_settings
 
 logger = logging.getLogger(__name__)

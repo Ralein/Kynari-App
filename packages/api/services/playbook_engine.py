@@ -12,7 +12,7 @@ No batch retraining — scores are recomputed on each plan request.
 import logging
 from datetime import datetime
 
-from database import fetch_all, fetch_one, execute_returning
+from database import fetch_all, execute_returning
 
 logger = logging.getLogger(__name__)
 

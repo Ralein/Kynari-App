@@ -11,16 +11,11 @@ import {
     type BookListItem,
 } from "@/lib/api";
 import {
-    BookOpen,
     ChevronRight,
     Compass,
     Heart,
-    Loader2,
     Moon,
-    Palette,
     Plus,
-    Sparkles,
-    Trash2,
     TreePine,
 } from "lucide-react";
 import { BookGenerator } from "@/components/book/BookGenerator";
@@ -80,7 +75,7 @@ export default function StoriesPage() {
         try {
             const token = await getToken();
             if (!token) return;
-            const book = await generateBook(token, {
+            await generateBook(token, {
                 child_id: selectedChild || undefined,
                 child_name: childName,
                 theme: selectedTheme,

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { getBook, getVoices, generateSpeechUrl, speakText, type BookResponse, type VoiceInfo } from "@/lib/api";
+import { getBook, getVoices, generateSpeechUrl, type BookResponse, type VoiceInfo } from "@/lib/api";
 import {
     ChevronRight,
     ChevronLeft,

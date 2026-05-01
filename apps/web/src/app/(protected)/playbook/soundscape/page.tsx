@@ -12,14 +12,10 @@ import {
 } from "@/lib/api";
 import {
     Clock,
-    Music,
-    Volume2,
-    Zap,
     CloudRain,
     Wind,
     Waves,
     TreePine,
-    Sparkles,
     Wind as WindIcon,
     Moon as MoonIcon,
     CloudDrizzle,
@@ -37,11 +33,11 @@ import { ProfileSelector } from "@/components/soundscape/ProfileSelector";
 import { LayerMixer } from "@/components/soundscape/LayerMixer";
 import { NatureSoundSelector } from "@/components/soundscape/NatureSoundSelector";
 import { AutoAdaptBadge } from "@/components/soundscape/AutoAdaptBadge";
-import { SoundscapeEngine, type NatureSoundType, type LayerVolumes } from "@/lib/audio-engine";
+import { SoundscapeEngine, type NatureSoundType } from "@/lib/audio-engine";
 
 // ─── Profile presets ────────────────────────────────────────
 
-const PROFILES: (SoundscapeProfile & { LucideIcon: any; muffled?: boolean })[] = [
+const PROFILES: (SoundscapeProfile & { LucideIcon: React.ElementType; muffled?: boolean })[] = [
     { id: "deep_sleep", name: "Deep Dream", description: "Spatialized sine-clusters and deep bass", pink_noise: 0.7, nature: 0.4, piano: 0.2, shush: 0.0, heartbeat: 0.0, icon: "🌙", LucideIcon: MoonIcon },
     { id: "light_fuss", name: "Silk Breeze", description: "Hiss-free rain textures and soft piano", pink_noise: 0.5, nature: 0.3, piano: 0.3, shush: 0.0, heartbeat: 0.0, icon: "🌧️", LucideIcon: CloudDrizzle },
     { id: "heavy_fuss", name: "Harmonic Shield", description: "Maximum sonic masking — zero-hiss", pink_noise: 0.85, nature: 0.0, piano: 0.0, shush: 0.0, heartbeat: 0.0, icon: "🌬️", LucideIcon: WindIcon },

@@ -205,12 +205,12 @@ export function PlaybookPanel({ childId, need, confidence }: PlaybookPanelProps)
                                     {fbState === "success" ? (
                                         <div className="flex items-center gap-2 text-sm font-medium text-[#4CAF50] bg-[#D5F5E3] px-4 py-2.5 rounded-2xl">
                                             <Check className="w-4 h-4" />
-                                            Great — we'll rank this higher next time!
+                                            Great — we&apos;ll rank this higher next time!
                                         </div>
                                     ) : fbState === "fail" ? (
                                         <div className="flex items-center gap-2 text-sm font-medium text-[#F0897A] bg-[#FFE5E0] px-4 py-2.5 rounded-2xl">
                                             <X className="w-4 h-4" />
-                                            Got it — we'll suggest alternatives instead.
+                                            Got it — we&apos;ll suggest alternatives instead.
                                         </div>
                                     ) : (
                                         <div className="flex items-center gap-3">

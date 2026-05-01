@@ -576,10 +576,3 @@ export default function AnalyzePage() {
         </div>
     );
 }
-
-// Suppress console.log in production, noop in dev
-function logger(msg: string) {
-    if (process.env.NODE_ENV === "development") {
-        console.log(`[AnalyzePage] ${msg}`);
-    }
-}

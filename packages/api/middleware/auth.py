@@ -1,7 +1,7 @@
 """JWT authentication middleware for FastAPI — Clerk Auth."""
 
 import httpx
-from fastapi import HTTPException, Depends
+from fastapi import HTTPException, Depends, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import jwt, JWTError
 from config import get_settings
@@ -72,8 +72,6 @@ def _get_signing_key(token: str) -> dict:
 
 
 # ─── Auth Dependency ─────────────────────────────────────────
-
-from fastapi import Query
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),

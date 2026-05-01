@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useAuth } from "@clerk/nextjs";
 import Link from "next/link";
 import {
@@ -51,11 +51,11 @@ export default function VoiceLullabyPage() {
     const [playbackSpeed, setPlaybackSpeed] = useState(0.9);
     const [shuffleQueue, setShuffleQueue] = useState<string[]>([]);
 
-    const allLullabies = [...lullabies, ...personalLullabies];
+    const allLullabies = useMemo(() => [...lullabies, ...personalLullabies], [lullabies, personalLullabies]);
 
-    const filteredLullabies = activeMood === "all"
+    const filteredLullabies = useMemo(() => activeMood === "all"
         ? allLullabies
-        : allLullabies.filter((l) => l.mood === activeMood);
+        : allLullabies.filter((l) => l.mood === activeMood), [allLullabies, activeMood]);
 
     // Audio Refs
     const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -471,11 +471,6 @@ export default function VoiceLullabyPage() {
         setActiveMood("personal"); // Auto-switch to personal to show it
     };
 
-    const allLullabies_unused = [...lullabies, ...personalLullabies];
-
-    const filteredLullabies_unused = activeMood === "all"
-        ? allLullabies
-        : allLullabies.filter((l) => l.mood === activeMood);
 
     if (loading) {
         return (

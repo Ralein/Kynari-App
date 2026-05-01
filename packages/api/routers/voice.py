@@ -12,9 +12,7 @@ from models.voice import (
     VoicePreferenceUpdate,
     LullabyInfo,
     LullabyGenerateRequest,
-    LullabyGenerateResponse,
     SpeakRequest,
-    SpeakResponse,
 )
 from services import voice_studio
 

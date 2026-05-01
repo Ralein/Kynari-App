@@ -8,7 +8,7 @@ for sleep analytics.
 import logging
 from datetime import datetime, timezone
 
-from database import fetch_one, fetch_all, execute_returning, execute
+from database import fetch_one, fetch_all, execute_returning
 
 logger = logging.getLogger(__name__)
 

@@ -216,7 +216,7 @@ export class SoundscapeEngine {
             const audioBuffer = await this.ctx.decodeAudioData(arrayBuffer);
             SoundscapeEngine.bufferCache.set(url, audioBuffer);
             return audioBuffer;
-        } catch (e) {
+        } catch {
             return null;
         }
     }
